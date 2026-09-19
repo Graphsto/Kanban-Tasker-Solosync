@@ -154,6 +154,14 @@ public sealed partial class MainWindow
             Border highlight = border;
             var edge = new Thickness(1, 1, 1, 3);
             if (columnLists.TryGetValue(columnId, out var list))
+            {
+                // The heading, buttons and gap above the cards are one drop zone.
+                // Anchor it to the viewport as well, so scrolling the list cannot
+                // turn a header drop into an insertion among off-screen cards.
+                var top = BoundsInRoot(list).Top;
+                if (list.Items.OfType<ListViewItem>().FirstOrDefault() is { } first)
+                    top = Math.Max(top, BoundsInRoot(first).Top);
+                if (drag.Position.Y < top) return new(columnId, 0, border, new Thickness(2));
                 foreach (var item in list.Items.OfType<ListViewItem>())
                     if (item.Tag is Guid taskId && tasks.IndexOf(taskId) is var itemIndex && itemIndex >= 0
                         && drag.Position.Y < BoundsInRoot(item).Top + item.ActualHeight / 2)
@@ -162,6 +170,7 @@ public sealed partial class MainWindow
                         if (item.Content is Border card) { highlight = card; edge = new(1, 3, 1, 1); }
                         break;
                     }
+            }
             var original = tasks.IndexOf(drag.Id);
             if (original >= 0 && original < target) target--;
             return new(columnId, target, highlight, edge);

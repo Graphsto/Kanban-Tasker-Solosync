@@ -253,6 +253,7 @@ public sealed partial class MainWindow
             await store.CommitAsync(editor => editor.MoveTask(taskId, firstColumn, 1));
             Render(); await CheckCardFramesAsync(firstColumn, "Card reorder");
             Check(WorkspaceView.Tasks(store.Current!, firstColumn).Select(x => x.Id).SequenceEqual([secondTask, taskId]), "Card reorder persists");
+            await CheckHeaderDropsAsync(taskId, firstColumn);
             column = ColumnsPanel.Children.OfType<Border>().First();
             await CheckPreviewAsync(column, firstColumn, true, "column-drag");
             var position = WorkspaceView.Columns(store.Current!, boardId!.Value).Count() - 1;
@@ -383,6 +384,78 @@ public sealed partial class MainWindow
             boardDrag = drag;
             var pending = ShowDragPreviewAsync(drag); CancelBoardDrag(); await pending;
             Check(DragLayer.Children.Count == 0 && visual.Opacity == 1, name + ": late capture cannot resurrect preview");
+        }
+        async Task CheckHeaderDropsAsync(Guid taskId, Guid sourceColumn)
+        {
+            var targetColumn = WorkspaceView.Columns(document!, boardId!.Value).First(x => x.Id != sourceColumn).Id;
+            var fixtures = new List<Guid>();
+            await store.CommitAsync(editor =>
+            {
+                for (var i = 0; i < 2; i++) fixtures.Add(editor.SaveTask(new TaskData
+                { BoardId = boardId.Value, ColumnId = targetColumn, Title = "Header drop target " + i }));
+            });
+            Render(); await SettleAsync();
+            var source = (Border)columnLists[sourceColumn].Items.OfType<ListViewItem>().Single(x => (Guid)x.Tag == taskId).Content;
+            var target = ColumnsPanel.Children.OfType<Border>().Single(x => (Guid)x.Tag == targetColumn);
+            var list = columnLists[targetColumn];
+            var bounds = BoundsInRoot(source);
+            var drag = new BoardDrag(source, source, taskId, false, document!.DocumentId, boardId.Value, null!,
+                new(bounds.Left + 20, bounds.Top + 20), bounds) { Moving = true };
+            var originalBrush = target.BorderBrush;
+            var originalThickness = target.BorderThickness;
+            boardDrag = drag;
+            var x = BoundsInRoot(target).Left + target.ActualWidth / 2;
+            foreach (var y in new[] { BoundsInRoot(target).Top + 25, BoundsInRoot(target).Top + 60, BoundsInRoot(list).Top - 3 })
+            {
+                drag.Position = new(x, y);
+                var drop = FindBoardDrop(drag);
+                Check(drop is { Index: 0 } && drop.Column == targetColumn && drop.Highlight == target && drop.Edge == new Thickness(2),
+                    "Column heading, controls and gap accept a card at the beginning with a full outline");
+            }
+            UpdateDragFeedback(scroll: false);
+            await ShowDragPreviewAsync(drag); await SettleAsync();
+            Check(target.BorderThickness == new Thickness(2) && target.BorderBrush == Brush("AccentFillColorDefaultBrush"),
+                "Header drop highlights all four column edges in the accent color");
+            await CaptureAsync("card-drop-column-header");
+            var items = list.Items.OfType<ListViewItem>().ToArray();
+            drag.Position = new(x, BoundsInRoot(items[0]).Top + 4);
+            UpdateDragFeedback(scroll: false);
+            Check(FindBoardDrop(drag) is { Index: 0 } overCard && ReferenceEquals(overCard.Highlight, items[0].Content),
+                "Moving from the header onto the first card restores the precise card insertion marker");
+            Check(target.BorderThickness == originalThickness && target.BorderBrush == originalBrush,
+                "Leaving the header clears its full-column outline");
+            drag.Position = new(x, BoundsInRoot(items[1]).Top - 2);
+            Check(FindBoardDrop(drag) is { Index: 1 }, "Insertion between cards is unchanged");
+            drag.Position = new(x, BoundsInRoot(items[1]).Bottom + 10);
+            Check(FindBoardDrop(drag) is { Index: 2 }, "Insertion below the last card is unchanged");
+            ClearDragHighlight();
+            list.Height = 70; list.VerticalAlignment = VerticalAlignment.Top;
+            Root.UpdateLayout(); await SettleAsync();
+            var viewer = FindScrollViewer(list)!;
+            viewer.ChangeView(null, viewer.ScrollableHeight, null, true);
+            await SettleAsync();
+            Check(viewer.VerticalOffset > 0, "Header drop is exercised with a genuinely scrolled card list");
+            drag.Position = new(x, BoundsInRoot(list).Top - 3);
+            var headerDrop = FindBoardDrop(drag)!;
+            Check(headerDrop.Index == 0 && headerDrop.Highlight == target, "A scrolled column header still inserts before every card");
+            var sourceBorder = ColumnsPanel.Children.OfType<Border>().Single(c => (Guid)c.Tag == sourceColumn);
+            drag.Position = new(BoundsInRoot(sourceBorder).Left + 30, BoundsInRoot(sourceBorder).Top + 25);
+            Check(FindBoardDrop(drag) is { Index: 0 } sameColumn && sameColumn.Column == sourceColumn && sameColumn.Highlight == sourceBorder,
+                "Dragging within the same column onto its header selects the first position");
+            drag.Position = new(-10, -10); UpdateDragFeedback(scroll: false);
+            Check(FindBoardDrop(drag) is null && dragHighlight is null, "Leaving the board removes the drop target and highlight");
+            CancelBoardDrag();
+            await store.CommitAsync(editor => editor.MoveTask(taskId, headerDrop.Column, headerDrop.Index));
+            await store.OpenAsync(store.FilePath!);
+            Check(WorkspaceView.Tasks(store.Current!, targetColumn).Select(t => t.Id).SequenceEqual(new[] { taskId }.Concat(fixtures))
+                && WorkspaceView.Tasks(store.Current!, sourceColumn).All(t => t.Id != taskId),
+                "Dropping on the header saves the new column and first position across reopening");
+            await store.CommitAsync(editor =>
+            {
+                editor.MoveTask(taskId, sourceColumn, 1);
+                foreach (var id in fixtures) editor.DeleteTask(id);
+            });
+            Render(); await SettleAsync();
         }
         async Task CaptureAsync(string name, FrameworkElement? target = null)
         {

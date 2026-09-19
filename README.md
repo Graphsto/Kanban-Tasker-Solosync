@@ -11,7 +11,7 @@ This is an independent local-file edition of [Hunter Johnson's Kanban Tasker](ht
 1. Choose **Create data file** or **Open data file**. The suggested filename is `KanbanTasker.kanban.json`.
 2. Create a board. Its initial columns are Backlog, To Do, In Progress, Review and Completed.
 3. Use **+** in a column to create a task. Select a card to edit it; commit changes with **Save**. Cancelling a draft leaves the saved task unchanged. A discard confirmation appears only when you have changed fields, including a tag you have not submitted. Opening a task without editing it, or undoing all edits, closes without a prompt.
-4. Drag cards between columns or within a column. Drag a column's heading to change column order. The full card or column follows the pointer, with a subdued placeholder at its original position and an insertion marker at the destination. Escape cancels the move. Column menus also provide **Move left/right**; card context menus provide keyboard-accessible movement. Cards appear immediately without a loading animation on startup or board updates.
+4. Drag cards between columns or within a column. Dropping above the first card, including on the column heading or controls, highlights the whole column and inserts the card at the beginning, even when its list is scrolled. Drag a column's heading to change column order. The full card or column follows the pointer, with a subdued placeholder at its original position and an insertion marker at the destination. Escape cancels the move. Column menus also provide **Move left/right**; card context menus provide keyboard-accessible movement. Cards appear immediately without a loading animation on startup or board updates.
 5. Column menus rename columns, change task limits, or delete columns and their tasks. The visible up/down arrows change the limit immediately by one; typed numbers remain supported. A limit of zero means unlimited. Limits are visual warnings, not a restriction on dropping tasks.
 6. **Calendar** opens the month view immediately. Dates with due tasks on the current board are highlighted; select a day to see its tasks and select a task to edit it. Highlights and results update while the calendar is open. Tasks support priorities, tags, descriptions, creation/start/finish/due dates, due times and reminders. Windows handles scheduled reminders, including snooze/dismiss.
 
@@ -44,6 +44,8 @@ Use **Settings → General** to open/create another file. Opening a different wo
 
 ## Local updates
 
+Version **2.4.1.3** adds a full-column drop highlight above the first card and inserts header drops at the beginning of the column.
+
 Version **2.4.1.2** restores automatic field-level merge, conflict-copy handling and durable recovery from before 2.4.1.1, and removes the temporary manual recovery action. The independent security fixes for change counters, bounded input reading, update manifests and reminder calculations remain. The file-authoritative behavior in the superseded 2.4.1.1 test build was withdrawn at the user's request.
 
 Version **2.4.1.0** shows the window once its XAML shell is loaded, reads the saved workspace and cleans old update files in the background, and creates the task editor only when first needed. This reduces startup work and avoids exposing the unpainted native window.
@@ -74,8 +76,8 @@ There is no online update check or download configured. Builds and tests are loc
 
 For a normal installation or update, use one of these files from the build output `build/packages`. Installers are not included in a source-only checkout; generate them with `scripts/package.ps1`. Existing local test packages were retained in the migration archive described in [project handoff](docs/project-handoff.md).
 
-- **`KanbanTasker-Setup-2.4.1.2-x64.exe`** for Intel/AMD PCs.
-- **`KanbanTasker-Setup-2.4.1.2-arm64.exe`** for ARM64 PCs.
+- **`KanbanTasker-Setup-2.4.1.3-x64.exe`** for Intel/AMD PCs.
+- **`KanbanTasker-Setup-2.4.1.3-arm64.exe`** for ARM64 PCs.
 
 1. Copy the appropriate **Setup.exe** to the receiving PC. This single file contains the app package, its public signing certificate and the installer's runtime.
 2. Close Kanban Tasker. Double-click the installer normally and select **Install** or **Update**. Do not start it under a different administrator account.
@@ -85,9 +87,9 @@ No PowerShell script, PowerShell 7, separately installed .NET runtime or Visual 
 
 The installer checks its embedded package hash, identity, architecture, version and certificate before installation. Only certificate trust is elevated, using **Local Computer → Trusted People**; app registration runs under the original user, including when different administrator credentials are entered in the Windows prompt. Windows validates the MSIX signature during deployment. No execution policy or signature validation is disabled, and no root CA is installed.
 
-For diagnostics, `KanbanTasker-Setup-2.4.1.2-x64.exe --verify-only` checks the included payload without installing the app or changing certificate trust.
+For diagnostics, `KanbanTasker-Setup-2.4.1.3-x64.exe --verify-only` checks the included payload without installing the app or changing certificate trust.
 
-The raw `KanbanTasker-2.4.1.2-x64.msix` / `arm64.msix` packages and `KanbanTasker.Local.cer` are still available for manual/managed deployment. The old `scripts/install.ps1` remains an optional developer tool, but is not required or recommended for normal installation.
+The raw `KanbanTasker-2.4.1.3-x64.msix` / `arm64.msix` packages and `KanbanTasker.Local.cer` are still available for manual/managed deployment. The old `scripts/install.ps1` remains an optional developer tool, but is not required or recommended for normal installation.
 
 **Errors 0x800B010A / 0x800B0109 (publisher certificate cannot be verified):** the local signing certificate must be trusted on each receiving PC before opening the MSIX. Importing it under Current User or Personal is insufficient for App Installer. This build uses a private self-signed certificate; it is not signed by a public certificate authority. See [Microsoft's certificate trust instructions](https://learn.microsoft.com/en-us/windows/msix/package/sign-msix-package-guide#testing-distribute-to-testers-with-a-self-signed-certificate).
 
@@ -100,7 +102,7 @@ Import-Certificate -FilePath .\KanbanTasker.Local.cer -CertStoreLocation Cert:\L
 Then install the package as the intended user:
 
 ```powershell
-Add-AppxPackage -Path .\KanbanTasker-2.4.1.2-x64.msix
+Add-AppxPackage -Path .\KanbanTasker-2.4.1.3-x64.msix
 ```
 
 Build scripts do not change certificate trust or install the app. For updates, keep the same certificate and increase the four-part `Version` in `Directory.Build.props`. Packaging uses that value for both the app and installer; `-Version` overrides it for a local test build. Replacing an EXE/MSIX without increasing its version does not update an installed app. Identity: `KanbanTasker.Revived`, publisher: `CN=KanbanTasker.Local`; the original Store package is unaffected.
@@ -138,7 +140,7 @@ global.json
 .\scripts\test-desktop.ps1          # isolated WinUI control test; shows its own test window
 .\scripts\test-setup.ps1            # isolated installer window test; does not install anything
 .\scripts\package.ps1                 # both architectures, self-contained and signed
-.\scripts\package.ps1 -Architecture x64 -Version 2.4.1.2
+.\scripts\package.ps1 -Architecture x64 -Version 2.4.1.3
 .\scripts\package-installer.ps1       # rebuild Setup.exe from existing signed MSIX files
 .\scripts\verify-packages.ps1         # signatures, metadata, notices and x64 payload; no installation
 .\scripts\export-notices.ps1          # restored dependency inventory and supplied license texts
