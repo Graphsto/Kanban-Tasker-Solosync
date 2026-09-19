@@ -1,0 +1,6 @@
+<Project>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)TextCatalog.cs" Link="Localization\TextCatalog.cs" />
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)*.json" LogicalName="KanbanTasker.Localization.%(Filename).json" />
+  </ItemGroup>
+</Project>

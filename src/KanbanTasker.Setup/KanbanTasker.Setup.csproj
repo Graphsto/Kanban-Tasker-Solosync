@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>KanbanTasker.Setup</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\KanbanTasker.Desktop\Assets\KanbanTasker.ico</ApplicationIcon>
+    <Product>Kanban Tasker Setup</Product>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' And '$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\KanbanTasker.Desktop\Assets\Logo.png" LogicalName="Setup.Logo" />
+    <Compile Include="..\Shared\UpdateFiles.cs" Link="Updates\UpdateFiles.cs" />
+    <Compile Include="..\Shared\WindowsSignature.cs" Link="Updates\WindowsSignature.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(SetupPayloadDirectory)' != ''">
+    <EmbeddedResource Include="$(SetupPayloadDirectory)\package.msix" LogicalName="Setup.Package" />
+    <EmbeddedResource Include="$(SetupPayloadDirectory)\certificate.cer" LogicalName="Setup.Certificate" />
+    <EmbeddedResource Include="$(SetupPayloadDirectory)\payload.json" LogicalName="Setup.Metadata" />
+  </ItemGroup>
+  <Target Name="RequireSetupPayload" BeforeTargets="PrepareForPublish">
+    <Error Condition="'$(KanbanSetupSmokeTest)' == 'true'" Text="The installer UI test must never be published." />
+    <Error Condition="'$(SetupPayloadDirectory)' == ''" Text="Use scripts/package-installer.ps1 to publish an installer with its verified MSIX payload." />
+  </Target>
+  <PropertyGroup Condition="'$(KanbanSetupSmokeTest)' == 'true'">
+    <DefineConstants>$(DefineConstants);KANBAN_SETUP_SMOKE_TEST</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(KanbanSetupSmokeTest)' == 'true'">
+    <Compile Include="..\..\tests\SetupSmokeTests.cs" Link="Tests\SetupSmokeTests.cs" />
+  </ItemGroup>
+</Project>

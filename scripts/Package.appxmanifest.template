@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+         IgnorableNamespaces="uap rescap">
+  <Identity Name="KanbanTasker.Revived" Publisher="CN=KanbanTasker.Local" Version="__VERSION__" ProcessorArchitecture="__ARCH__" />
+  <Properties>
+    <DisplayName>Kanban Tasker</DisplayName><PublisherDisplayName>Kanban Tasker Local</PublisherDisplayName>
+    <Description>A simple local-file Kanban board.</Description><Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies><TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" /></Dependencies>
+  <Resources><Resource Language="en-US" /><Resource Language="de-DE" /><Resource Language="es-ES" /><Resource Language="fr-FR" /><Resource Language="it-IT" /></Resources>
+  <Applications>
+    <Application Id="App" Executable="KanbanTasker.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Kanban Tasker" Description="Kanban boards in a local JSON file."
+          Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png"
+          BackgroundColor="transparent">
+        <uap:DefaultTile ShortName="Kanban Tasker" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+  <Capabilities><rescap:Capability Name="runFullTrust" /></Capabilities>
+</Package>

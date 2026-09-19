@@ -1,0 +1,72 @@
+<Window x:Class="KanbanTasker.Desktop.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Kanban Tasker">
+    <Grid x:Name="Root" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Loaded="Root_Loaded">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid Padding="20,12" ColumnSpacing="12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <Image x:Name="AppLogo" Source="Assets/Logo.png" Width="32" Height="32" AutomationProperties.Name="Kanban Tasker logo"/>
+                <TextBlock Text="Kanban Tasker" Style="{ThemeResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
+            </StackPanel>
+            <ComboBox x:Name="BoardPicker" Grid.Column="1" PlaceholderText="Choose a board" MinWidth="180" MaxWidth="340" HorizontalAlignment="Stretch"
+                      DisplayMemberPath="Name" SelectionChanged="BoardPicker_SelectionChanged" AutomationProperties.Name="Board"/>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+                <Button x:Name="NewBoardButton" Content="New board" Click="NewBoard_Click" ToolTipService.ToolTip="Create a board"/>
+                <Button x:Name="CalendarButton" Content="Calendar" Click="Calendar_Click"/>
+                <Button x:Name="BoardMenuButton" AutomationProperties.Name="Board actions" ToolTipService.ToolTip="Board actions">
+                    <SymbolIcon Symbol="More"/>
+                    <Button.Flyout><MenuFlyout>
+                        <MenuFlyoutItem x:Name="EditBoardMenuItem" Text="Edit board" Click="EditBoard_Click"/>
+                        <MenuFlyoutItem x:Name="ManageBoardsMenuItem" Text="Manage boards" Click="ManageBoards_Click"/>
+                        <MenuFlyoutSeparator/>
+                        <MenuFlyoutItem x:Name="DeleteBoardMenuItem" Text="Delete board" Click="DeleteBoard_Click"/>
+                    </MenuFlyout></Button.Flyout>
+                </Button>
+                <Button x:Name="SettingsButton" Click="Settings_Click" AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings"><SymbolIcon Symbol="Setting"/></Button>
+            </StackPanel>
+        </Grid>
+        <InfoBar x:Name="ErrorBar" Grid.Row="1" Severity="Error" IsOpen="False" IsClosable="True" Margin="16,0,16,8"/>
+        <SplitView x:Name="TaskPane" Grid.Row="2" PanePlacement="Right" DisplayMode="Inline" OpenPaneLength="380" IsPaneOpen="False">
+            <SplitView.Pane>
+                <ContentControl x:Name="EditorHost" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+            </SplitView.Pane>
+            <Grid>
+                <ScrollViewer x:Name="BoardScroll" HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled" VerticalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="ColumnsPanel" Orientation="Horizontal" Spacing="12" Padding="20,8,20,16"/>
+                </ScrollViewer>
+                <StackPanel x:Name="WelcomePanel" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" MaxWidth="460" Margin="24">
+                    <Image Source="Assets/Logo.png" Width="96" Height="96" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="WelcomeTitle" Text="Your boards, in one local file" Style="{ThemeResource TitleTextBlockStyle}" TextWrapping="Wrap" TextAlignment="Center"/>
+                    <TextBlock x:Name="WelcomeText" Text="Create a data file or open an existing one. Choose a locally available Nextcloud folder to use the same boards on your other devices." TextWrapping="Wrap" TextAlignment="Center"/>
+                    <StackPanel x:Name="WelcomeActions" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+                        <Button x:Name="CreateDataFileButton" Content="Create data file" Style="{StaticResource AccentButtonStyle}" Click="CreateFile_Click"/>
+                        <Button x:Name="OpenDataFileButton" Content="Open data file" Click="OpenFile_Click"/>
+                    </StackPanel>
+                    <Button x:Name="EmptyBoardButton" Content="Create your first board" Click="NewBoard_Click" HorizontalAlignment="Center" Visibility="Collapsed"/>
+                </StackPanel>
+            </Grid>
+        </SplitView>
+        <Grid Grid.Row="3" Padding="20,6" ColumnSpacing="12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock x:Name="PathText" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="StatusText" Grid.Column="1" Text="No data file open" FontSize="12"/>
+        </Grid>
+        <Canvas x:Name="DragLayer" Grid.RowSpan="4" IsHitTestVisible="False"/>
+        <!-- Theme-scoped resource references also supply brushes to code-created board elements. -->
+        <Grid Width="0" Height="0" IsHitTestVisible="False" Opacity="0">
+            <Border x:Name="ThemePage" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"/>
+            <Border x:Name="ThemeSurface" Background="{ThemeResource LayerFillColorDefaultBrush}"/>
+            <Border x:Name="ThemeDialog" Background="{ThemeResource ContentDialogBackground}"/>
+            <Border x:Name="ThemeCard" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            <Border x:Name="ThemeStroke" Background="{ThemeResource CardStrokeColorDefaultBrush}"/>
+            <Border x:Name="ThemeSecondaryText" Background="{ThemeResource TextFillColorSecondaryBrush}"/>
+            <Border x:Name="ThemePrimaryText" Background="{ThemeResource TextFillColorPrimaryBrush}"/>
+            <Border x:Name="ThemeCritical" Background="{ThemeResource SystemFillColorCriticalBrush}"/>
+            <Border x:Name="ThemeCaution" Background="{ThemeResource SystemFillColorCautionBrush}"/>
+            <Border x:Name="ThemeSuccess" Background="{ThemeResource SystemFillColorSuccessBrush}"/>
+            <Border x:Name="ThemeAccent" Background="{ThemeResource AccentFillColorDefaultBrush}"/>
+        </Grid>
+    </Grid>
+</Window>

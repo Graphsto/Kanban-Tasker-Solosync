@@ -1,0 +1,39 @@
+<UserControl x:Class="KanbanTasker.Desktop.TaskEditorView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid x:Name="EditorSurface" x:FieldModifier="public" Padding="20" Background="{ThemeResource LayerFillColorDefaultBrush}">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <TextBlock x:Name="EditorHeading" x:FieldModifier="public" Text="New task" Style="{ThemeResource SubtitleTextBlockStyle}" Margin="0,0,0,16"/>
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="14" Padding="0,0,8,12">
+                <InfoBar x:Name="DraftNotice" x:FieldModifier="public" Severity="Informational" IsOpen="False" IsClosable="False" Message="This task changed on another device. Saving updates only the fields you changed."/>
+                <TextBox x:Name="TaskTitle" x:FieldModifier="public" Header="Title" TextWrapping="Wrap"/>
+                <TextBox x:Name="TaskDescription" x:FieldModifier="public" Header="Description" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="96"/>
+                <ComboBox x:Name="TaskColumn" x:FieldModifier="public" Header="Column" DisplayMemberPath="Name" HorizontalAlignment="Stretch"/>
+                <ComboBox x:Name="TaskPriority" x:FieldModifier="public" Header="Priority" DisplayMemberPath="Name" SelectedValuePath="Value" HorizontalAlignment="Stretch"/>
+                <AutoSuggestBox x:Name="TagInput" x:FieldModifier="public" Header="Tags" PlaceholderText="Type a tag and press Enter"/>
+                <StackPanel x:Name="TagList" x:FieldModifier="public" Spacing="4"/>
+                <Expander x:Name="DateInformation" x:FieldModifier="public" Header="Date information" HorizontalAlignment="Stretch" IsExpanded="True">
+                    <StackPanel Spacing="12">
+                        <TextBlock x:Name="CreatedText" x:FieldModifier="public" TextWrapping="Wrap"/>
+                        <CalendarDatePicker x:Name="DueDate" x:FieldModifier="public" Header="Due date" PlaceholderText="Choose a date" HorizontalAlignment="Stretch"/>
+                        <Button x:Name="ClearDueDateButton" x:FieldModifier="public" Content="Clear due date"/>
+                        <TimePicker x:Name="DueTime" x:FieldModifier="public" Header="Due time" HorizontalAlignment="Stretch"/>
+                        <Button x:Name="ClearDueTimeButton" x:FieldModifier="public" Content="Clear due time"/>
+                        <ComboBox x:Name="ReminderPicker" x:FieldModifier="public" Header="Reminder" DisplayMemberPath="Name" HorizontalAlignment="Stretch"/>
+                        <CalendarDatePicker x:Name="StartDate" x:FieldModifier="public" Header="Start date" HorizontalAlignment="Stretch"/>
+                        <Button x:Name="ClearStartDateButton" x:FieldModifier="public" Content="Clear start date"/>
+                        <CalendarDatePicker x:Name="FinishDate" x:FieldModifier="public" Header="Finish date" HorizontalAlignment="Stretch"/>
+                        <Button x:Name="ClearFinishDateButton" x:FieldModifier="public" Content="Clear finish date"/>
+                        <TextBlock x:Name="DaysText" x:FieldModifier="public" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Expander>
+            </StackPanel>
+        </ScrollViewer>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Padding="0,12,0,0">
+            <Button x:Name="SaveTaskButton" x:FieldModifier="public" Content="Save" Style="{StaticResource AccentButtonStyle}"/>
+            <Button x:Name="CancelTaskButton" x:FieldModifier="public" Content="Cancel"/>
+            <Button x:Name="DeleteTaskButton" x:FieldModifier="public" Content="Delete"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

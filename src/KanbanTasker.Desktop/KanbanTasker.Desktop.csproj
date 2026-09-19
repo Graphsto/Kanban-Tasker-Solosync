@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RootNamespace>KanbanTasker.Desktop</RootNamespace>
+    <AssemblyName>KanbanTasker</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\KanbanTasker.ico</ApplicationIcon>
+    <Platforms>x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' And '$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishReadyToRun>false</PublishReadyToRun>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(KanbanMsixBuild)' == 'true'">
+    <!-- Installed XAML looks up resources by the MSIX identity, not the exe name. -->
+    <ProjectPriFileName>resources.pri</ProjectPriFileName>
+    <ProjectPriIndexName>KanbanTasker.Revived</ProjectPriIndexName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
+    <ProjectReference Include="..\KanbanTasker.Core\KanbanTasker.Core.csproj" />
+    <Content Include="Assets\*" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="$(KanbanSigningCertificatePath)" LogicalName="KanbanTasker.PublisherCertificate" Condition="'$(KanbanSigningCertificatePath)' != ''" />
+    <Compile Include="..\Shared\UpdateFiles.cs" Link="Updates\UpdateFiles.cs" />
+    <Compile Include="..\Shared\WindowsSignature.cs" Link="Updates\WindowsSignature.cs" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.10" />
+  </ItemGroup>
+  <Import Project="..\Shared\Localization\Localization.projitems" />
+  <!-- A separate developer test build, never enabled by packaging. It uses its own profile. -->
+  <PropertyGroup Condition="'$(KanbanUiSmokeTest)' == 'true'">
+    <DefineConstants>$(DefineConstants);KANBAN_UI_SMOKE_TEST</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(KanbanUiSmokeTest)' == 'true'">
+    <Compile Include="..\..\tests\DesktopSmokeTests.cs" Link="Tests\DesktopSmokeTests.cs" />
+  </ItemGroup>
+  <Target Name="RejectPackagedSmokeTest" BeforeTargets="PrepareForBuild" Condition="'$(KanbanUiSmokeTest)' == 'true' And '$(KanbanMsixBuild)' == 'true'">
+    <Error Text="The isolated desktop smoke test must never be included in an installable package." />
+  </Target>
+</Project>

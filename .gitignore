@@ -1,0 +1,14 @@
+# Generated binaries, restore data, packages and test results
+/build/
+
+# Local editor settings and project context
+/.vscode/
+/.vs/
+/docs/
+/branding/context/
+/AGENTS.md
+
+# Private signing keys
+*.pfx
+*.p12
+*.key

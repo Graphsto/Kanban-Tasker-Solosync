@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsPackable>false</IsPackable><IsTestProject>true</IsTestProject></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0"><PrivateAssets>all</PrivateAssets></PackageReference>
+    <ProjectReference Include="..\..\src\KanbanTasker.Core\KanbanTasker.Core.csproj" />
+    <Using Include="Xunit" />
+    <Compile Include="..\..\src\KanbanTasker.Setup\PayloadValidation.cs" Link="Setup\PayloadValidation.cs" />
+    <Compile Include="..\..\src\Shared\UpdateFiles.cs" Link="Updates\UpdateFiles.cs" />
+    <Compile Include="..\..\src\KanbanTasker.Desktop\LocalPreferences.cs" Link="Desktop\LocalPreferences.cs" />
+    <Compile Include="..\..\src\KanbanTasker.Desktop\AppearanceColors.cs" Link="Desktop\AppearanceColors.cs" />
+  </ItemGroup>
+  <Import Project="..\..\src\Shared\Localization\Localization.projitems" />
+</Project>

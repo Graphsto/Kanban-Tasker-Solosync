@@ -1,0 +1,38 @@
+Kanban Tasker installieren
+=========================
+
+1. Intel/AMD-PC: KanbanTasker-Setup-<Version>-x64.exe verwenden.
+   ARM-PC:       KanbanTasker-Setup-<Version>-arm64.exe verwenden.
+
+2. Nur diese eine EXE auf den Zielrechner kopieren und per Doppelklick
+   starten. Im Fenster auf "Install" klicken.
+
+3. Den Windows-Administratorhinweis fuer das lokale Herausgeberzertifikat
+   bestaetigen. Das ist auf jedem Rechner einmal erforderlich.
+
+4. "Finish" anklicken. Kanban Tasker steht danach im Windows-Startmenue.
+
+Die EXE enthaelt App, Zertifikat und Laufzeit. Es sind keine PS1-Datei,
+kein PowerShell 7 und keine separat installierte .NET-Laufzeit notwendig.
+Windows-Sicherheitseinstellungen und Skript-Richtlinien bleiben unveraendert.
+
+Fuer die Zertifikatsfreigabe werden Administratorrechte benoetigt.
+Auf einem verwalteten Rechner muss ggf. der Administrator helfen.
+
+Die Rohdateien *.msix und *.cer sind nur fuer die manuelle Installation
+oder eine zentral verwaltete Verteilung vorgesehen.
+
+Updates
+-------
+
+Von einer alten Version: Kanban Tasker schliessen, die neue Setup.exe
+starten und "Update" anklicken. Boards und ausgewaehlter Dateipfad bleiben
+erhalten. Die Versionsnummer der neuen Datei muss hoeher sein.
+
+Ab Version 2.1: In der App "Settings" > "App updates" >
+"Install update from file..." waehlen und die neue Setup.exe oder MSIX
+auswaehlen. Version und Signatur werden vor dem Start geprueft.
+Entwuerfe vorher speichern; ungespeicherte Entwuerfe werden nicht geteilt.
+
+Gleiche Versionen werden als bereits installiert angezeigt, aeltere
+Versionen nicht als Update angeboten. Es gibt aktuell keine Online-Suche.
