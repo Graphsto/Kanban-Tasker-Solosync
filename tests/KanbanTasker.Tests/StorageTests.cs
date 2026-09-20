@@ -14,6 +14,49 @@ public sealed class StorageTests : IDisposable
     private async Task SeedAsync() => await File.WriteAllBytesAsync(FilePath, WorkspaceJson.Serialize(MergeTests.Example().Document));
 
     [Fact]
+    public async Task GroupsTransferBetweenStoresAndSurviveConflictCopiesRecoveryAndRestart()
+    {
+        await SeedAsync();
+        Guid group;
+        await using (var first = Store())
+        await using (var second = Store("b"))
+        {
+            await first.OpenAsync(FilePath); await second.OpenAsync(FilePath);
+            var board = first.Current!.Boards.Single().Id;
+            group = Guid.Empty;
+            await first.CommitAsync(e => { group = e.CreateGroup("Work"); e.AssignBoardGroup(board, group); });
+            await second.RefreshAsync();
+            Assert.Equal(board, WorkspaceView.BoardsInGroup(second.Current!, group).Single().Id);
+            var delayed = first.Current!;
+            await second.CommitAsync(e => e.RenameGroup(group, "Office"));
+            await first.RefreshAsync();
+            Assert.Equal("Office", first.Current!.Groups.Single().Get<string>(Fields.Name));
+            await File.WriteAllBytesAsync(Path.Combine(Path.GetDirectoryName(FilePath)!, "conflict.json"), WorkspaceJson.Serialize(delayed));
+            await first.CommitAsync(e => e.DeleteGroup(group));
+            await second.RefreshAsync();
+            Assert.Empty(WorkspaceView.Groups(second.Current!));
+            Assert.Single(WorkspaceView.BoardsInGroup(second.Current!, null));
+            Assert.Single(WorkspaceView.AllTasks(second.Current!));
+        }
+        await using var restarted = Store(); await restarted.OpenAsync(FilePath);
+        Assert.NotNull(restarted.Current!.Groups.Single(g => g.Id == group).Deleted);
+        Assert.Single(WorkspaceView.BoardsInGroup(restarted.Current!, null));
+        Assert.Single(WorkspaceView.AllTasks(restarted.Current!));
+    }
+
+    [Fact]
+    public async Task OpeningPreviousFormatDoesNotReplaceTheFile()
+    {
+        var previous = Encoding.UTF8.GetBytes("{\"schemaVersion\":1,\"documentId\":\"11111111-1111-1111-1111-111111111111\",\"boards\":[],\"columns\":[],\"tasks\":[]}");
+        await File.WriteAllBytesAsync(FilePath, previous);
+        await using var store = Store();
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.OpenAsync(FilePath));
+        Assert.Null(store.Current);
+        Assert.Equal(StorageState.Error, store.Status.State);
+        Assert.Equal(previous, await File.ReadAllBytesAsync(FilePath));
+    }
+
+    [Fact]
     public async Task CreateSaveReopenAndMovePersist()
     {
         await using (var first = Store())

@@ -8,11 +8,34 @@ public sealed class WorkspaceEditor(WorkspaceDocument document, ChangeClock cloc
     public WorkspaceDocument Document { get; } = document;
     private ChangeStamp? stamp;
     private ChangeStamp Stamp => stamp ??= clock.Next();
-    public Guid CreateBoard(string name, string notes = "")
+    public Guid CreateGroup(string name)
+    {
+        ValidateGroupName(Guid.Empty, name);
+        var group = NewEntity(Guid.Empty);
+        group.Set(Fields.Name, name.Trim(), Stamp);
+        Document.Groups.Add(group);
+        return group.Id;
+    }
+    public void RenameGroup(Guid id, string name)
+    {
+        var group = Group(id);
+        ValidateGroupName(id, name);
+        Set(group, Fields.Name, name.Trim());
+    }
+    public void DeleteGroup(Guid id) => Group(id).Deleted = Stamp;
+    public void AssignBoardGroup(Guid boardId, Guid? groupId)
+    {
+        var board = Board(boardId);
+        if (groupId is { } id) Group(id);
+        Set(board, Fields.GroupId, groupId);
+    }
+    public Guid CreateBoard(string name, string notes = "", Guid? groupId = null)
     {
         RequireText(name, "Board name");
+        if (groupId is { } id) Group(id);
         var board = NewEntity(Guid.Empty);
         board.Set(Fields.Name, name.Trim(), Stamp); board.Set(Fields.Notes, notes, Stamp);
+        board.Set(Fields.GroupId, groupId, Stamp);
         board.Set(Fields.Order, Array.Empty<Guid>(), Stamp);
         Document.Boards.Add(board);
         foreach (var title in new[] { "Backlog", "To Do", "In Progress", "Review", "Completed" }) CreateColumn(board.Id, title, 10);
@@ -120,6 +143,14 @@ public sealed class WorkspaceEditor(WorkspaceDocument document, ChangeClock cloc
             entity.Fields[field] = new(Stamp, json);
     }
     private EntityRecord NewEntity(Guid boardId) => new() { Id = Guid.NewGuid(), BoardId = boardId, Created = Stamp };
+    private EntityRecord Group(Guid id) => WorkspaceView.Groups(Document).FirstOrDefault(x => x.Id == id)
+        ?? throw new InvalidOperationException("This group was deleted. Choose another group.");
+    private void ValidateGroupName(Guid id, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Group name cannot be empty.");
+        if (WorkspaceView.Groups(Document).Any(x => x.Id != id && x.Get<string>(Fields.Name).Equals(name.Trim(), StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException("A group with this name already exists.");
+    }
     private EntityRecord Board(Guid id) => WorkspaceView.Boards(Document).FirstOrDefault(x => x.Id == id)
         ?? throw new InvalidOperationException("This board was deleted. Your draft has been kept.");
     private EntityRecord Column(Guid id)

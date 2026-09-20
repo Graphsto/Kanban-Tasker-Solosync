@@ -8,7 +8,7 @@
     <ArtifactsPath>$(MSBuildThisFileDirectory)build</ArtifactsPath>
     <UseArtifactsOutput>true</UseArtifactsOutput>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <Version>2.4.1.5</Version>
+    <Version>2.4.1.6</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
   </PropertyGroup>

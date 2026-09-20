@@ -18,7 +18,7 @@ try {
     if (-not (Test-Path -LiteralPath $report)) { throw "No showcase result. Logs: $output" }
     $result = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
     if (-not $result.success) { throw "Showcase failed: $($result.error)" }
-    $names = @('board-dark', 'drag-and-drop', 'task-details', 'calendar', 'board-dark-blue', 'appearance')
+    $names = @('board-dark', 'drag-and-drop', 'task-details', 'calendar', 'board-dark-blue', 'appearance', 'board-groups')
     foreach ($name in $names) {
         if (-not (Test-Path -LiteralPath (Join-Path $results "$name.png"))) { throw "Missing screenshot: $name" }
     }
@@ -27,5 +27,5 @@ try {
     foreach ($name in $names) {
         Copy-Item -LiteralPath (Join-Path $results "$name.png") -Destination (Join-Path $destination "$name.png")
     }
-    Write-Host "Six screenshots captured from the real app with isolated demo data: $destination"
+    Write-Host "Seven screenshots captured from the real app with isolated demo data: $destination"
 } finally { Pop-Location }

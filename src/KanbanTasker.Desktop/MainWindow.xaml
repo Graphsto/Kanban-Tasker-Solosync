@@ -5,13 +5,19 @@
     <Grid x:Name="Root" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Loaded="Root_Loaded">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <Grid Padding="20,12" ColumnSpacing="12">
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                 <Image x:Name="AppLogo" Source="Assets/Logo.png" Width="32" Height="32" AutomationProperties.Name="Kanban Tasker logo"/>
                 <TextBlock Text="Kanban Tasker" Style="{ThemeResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
             </StackPanel>
-            <ComboBox x:Name="BoardPicker" Grid.Column="1" PlaceholderText="Choose a board" MinWidth="180" MaxWidth="340" HorizontalAlignment="Stretch"
-                      DisplayMemberPath="Name" SelectionChanged="BoardPicker_SelectionChanged" AutomationProperties.Name="Board"/>
+            <Grid x:Name="BoardSelectors" Grid.Column="1" MaxWidth="340" HorizontalAlignment="Stretch">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <ComboBox x:Name="GroupPicker" Width="160" Margin="0,0,12,0" Visibility="Collapsed"
+                          DisplayMemberPath="Name" SelectionChanged="GroupPicker_SelectionChanged" AutomationProperties.Name="Board group"/>
+                <ComboBox x:Name="BoardPicker" Grid.Column="1" PlaceholderText="Choose a board" MinWidth="180" HorizontalAlignment="Stretch"
+                          DisplayMemberPath="Name" SelectionChanged="BoardPicker_SelectionChanged" AutomationProperties.Name="Board"/>
+            </Grid>
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
                 <Button x:Name="NewBoardButton" Content="New board" Click="NewBoard_Click" ToolTipService.ToolTip="Create a board"/>
                 <Button x:Name="CalendarButton" Content="Calendar" Click="Calendar_Click"/>

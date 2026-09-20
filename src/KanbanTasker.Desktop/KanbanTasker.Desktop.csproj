@@ -43,6 +43,7 @@
   <ItemGroup Condition="'$(KanbanUiSmokeTest)' == 'true'">
     <Compile Include="..\..\tests\DesktopSmokeTests.cs" Link="Tests\DesktopSmokeTests.cs" />
     <Compile Include="..\..\tests\DesktopShowcase.cs" Link="Tests\DesktopShowcase.cs" />
+    <Compile Include="..\..\tests\DesktopGroupTests.cs" Link="Tests\DesktopGroupTests.cs" />
   </ItemGroup>
   <Target Name="RejectPackagedSmokeTest" BeforeTargets="PrepareForBuild" Condition="'$(KanbanUiSmokeTest)' == 'true' And '$(KanbanMsixBuild)' == 'true'">
     <Error Text="The isolated desktop smoke test must never be included in an installable package." />

@@ -15,6 +15,7 @@ An independent edition of [Hunter Johnson's original Kanban Tasker](https://gith
 ## Features
 
 - **Boards for different projects.** Add board notes and customise, reorder or collapse columns. Optional column limits help you keep work in progress under control.
+- **Optional [board groups](#board-groups).** Separate Work, Personal or other areas with a second dropdown. Enable it in Settings → Advanced; groups travel with your data file.
 - **Cards with the details you need.** Descriptions, priorities, tags, start/finish dates, due dates and Windows reminders.
 - **Drag cards and columns.** The item follows the pointer as you move it. Drop cards between tasks or on a column heading; movement is also available through context menus.
 - **A calendar at a glance.** Days with due tasks are highlighted. Select a day to see its tasks, then open a task to edit it.
@@ -61,6 +62,22 @@ Public release downloads and a Microsoft Store listing are not published yet. A 
 4. Open **Settings → Appearance** to choose a language or theme. **Settings → General** lets you switch data files.
 
 Column limits are visual warnings, not hard restrictions. Setting a limit to zero removes it. Windows reminders require an installed app and depend on your Windows notification settings.
+
+Data files use **format 2**. Earlier development files are not imported or converted; create a new data file for this version. All devices opening the same file need a version that supports this format.
+
+## Board groups
+
+Keep work, personal plans or other areas in separate groups. A second dropdown to the left of the board selector filters the available boards.
+
+![The Projects group selected in the dropdown to the left of the Studio refresh board](branding/screenshots/board-groups.png)
+
+1. Open **Settings → Advanced** and turn on **Enable board groups**. The feature is off by default.
+2. Create your groups there, then assign a group when creating or editing a board.
+3. Choose a group from the new dropdown. **All boards** shows everything; **Ungrouped** shows boards without a group.
+
+You can rename or delete groups in **Advanced**. Deleting a group keeps its boards and tasks under **Ungrouped**. Turning the feature off hides the selector without removing groups or assignments.
+
+Groups and board assignments are saved in your JSON file and travel with it. Whether the feature is enabled and which group is selected are preferences for each device.
 
 ## Moving between your devices
 

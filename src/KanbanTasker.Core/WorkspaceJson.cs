@@ -22,8 +22,11 @@ public static class WorkspaceJson
             CheckDuplicateKeys(json.RootElement);
             foreach (var name in new[] { "schemaVersion", "documentId", "boards", "columns", "tasks" })
                 if (!json.RootElement.TryGetProperty(name, out _)) throw new InvalidDataException($"Missing workspace property: {name}.");
-            if (json.RootElement.GetProperty("schemaVersion").GetInt32() != 1)
+            if (json.RootElement.GetProperty("schemaVersion").GetInt32() == 1)
+                throw new InvalidDataException("This data file uses the previous format. Create a new data file for this version of Kanban Tasker.");
+            if (json.RootElement.GetProperty("schemaVersion").GetInt32() != WorkspaceDocument.CurrentSchemaVersion)
                 throw new InvalidDataException("This workspace uses an unsupported format version. Update the app before opening it.");
+            if (!json.RootElement.TryGetProperty("groups", out _)) throw new InvalidDataException("Missing workspace property: groups.");
             var document = JsonSerializer.Deserialize<WorkspaceDocument>(bytes.Span, Options)
                 ?? throw new InvalidDataException("The workspace is empty.");
             Validate(document);
@@ -38,6 +41,7 @@ public static class WorkspaceJson
     {
         Validate(document);
         var ordered = document.Clone();
+        ordered.Groups = ordered.Groups.OrderBy(x => x.Id).ToList();
         ordered.Boards = ordered.Boards.OrderBy(x => x.Id).ToList();
         ordered.Columns = ordered.Columns.OrderBy(x => x.Id).ToList();
         ordered.Tasks = ordered.Tasks.OrderBy(x => x.Id).ToList();
@@ -77,7 +81,8 @@ public static class WorkspaceJson
     }
     public static void Validate(WorkspaceDocument document)
     {
-        if (document.SchemaVersion != 1 || document.DocumentId == Guid.Empty || document.Boards is null || document.Columns is null || document.Tasks is null)
+        if (document.SchemaVersion != WorkspaceDocument.CurrentSchemaVersion || document.DocumentId == Guid.Empty
+            || document.Groups is null || document.Boards is null || document.Columns is null || document.Tasks is null)
             throw new InvalidDataException("Invalid workspace header.");
         var ids = new HashSet<Guid>();
         foreach (var entity in document.Entities)
@@ -92,10 +97,19 @@ public static class WorkspaceJson
                 ValidateStamp(value.Stamp);
             }
         }
+        foreach (var group in document.Groups)
+        {
+            CheckFields(group, [Fields.Name]);
+            if (group.BoardId != Guid.Empty) throw new InvalidDataException("A group cannot belong to a board.");
+            Text(group, Fields.Name, true);
+        }
+        var groups = document.Groups.Select(x => x.Id).ToHashSet();
         foreach (var board in document.Boards)
         {
-            CheckFields(board, [Fields.Name, Fields.Notes, Fields.Order]);
+            CheckFields(board, [Fields.Name, Fields.Notes, Fields.Order, Fields.GroupId]);
             if (board.BoardId != Guid.Empty) throw new InvalidDataException("A board cannot belong to another board.");
+            if (board.Get<Guid?>(Fields.GroupId) is { } groupId && !groups.Contains(groupId))
+                throw new InvalidDataException("A board references an unknown group.");
             Text(board, Fields.Name, true); Text(board, Fields.Notes); Order(board);
         }
         var boards = document.Boards.Select(x => x.Id).ToHashSet();

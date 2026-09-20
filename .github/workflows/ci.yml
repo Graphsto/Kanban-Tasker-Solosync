@@ -1,0 +1,172 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: pwsh
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+  NUGET_PACKAGES: ${{ github.workspace }}/build/nuget
+
+jobs:
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install verified Gitleaks CLI
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+            --output "$RUNNER_TEMP/gitleaks.tar.gz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+      - name: Scan history with redacted output
+        shell: bash
+        run: '"$RUNNER_TEMP/gitleaks" git . --redact=100 --no-banner --log-opts="--all"'
+
+  core-tests:
+    name: Core tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: Run core and shared-logic tests
+        run: ./scripts/test.ps1
+      - name: Upload test results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: core-tests-${{ matrix.os }}
+          path: build/test-results/*.trx
+          if-no-files-found: warn
+          retention-days: 7
+
+  windows-build:
+    name: Windows Release (${{ matrix.architecture }})
+    runs-on: windows-2025
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        architecture: [x64, arm64]
+    env:
+      BUILD_ARCHITECTURE: ${{ matrix.architecture }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: Restore locked dependencies
+        run: |
+          New-Item -ItemType Directory -Path build/ci -Force | Out-Null
+          dotnet restore src/KanbanTasker.Desktop/KanbanTasker.Desktop.csproj --locked-mode
+          if ($LASTEXITCODE) { throw 'Desktop restore failed.' }
+          dotnet restore src/KanbanTasker.Setup/KanbanTasker.Setup.csproj --locked-mode
+          if ($LASTEXITCODE) { throw 'Setup restore failed.' }
+      - name: Build Desktop
+        run: |
+          dotnet build src/KanbanTasker.Desktop/KanbanTasker.Desktop.csproj --no-restore -c Release -r "win-$env:BUILD_ARCHITECTURE" "-p:Platform=$env:BUILD_ARCHITECTURE" -p:ContinuousIntegrationBuild=true "-flp:logfile=build/ci/desktop.log;verbosity=normal"
+          if ($LASTEXITCODE) { throw 'Desktop build failed.' }
+      - name: Build Setup
+        run: |
+          dotnet build src/KanbanTasker.Setup/KanbanTasker.Setup.csproj --no-restore -c Release -r "win-$env:BUILD_ARCHITECTURE" "-p:Platform=$env:BUILD_ARCHITECTURE" -p:ContinuousIntegrationBuild=true "-flp:logfile=build/ci/setup.log;verbosity=normal"
+          if ($LASTEXITCODE) { throw 'Setup build failed.' }
+      - name: Upload build logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: build-logs-${{ matrix.architecture }}
+          path: build/ci/*.log
+          if-no-files-found: warn
+          retention-days: 7
+
+  ui-tests:
+    name: Windows UI tests (x64)
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: Run isolated Desktop UI tests
+        run: ./scripts/test-desktop.ps1
+      - name: Run isolated Setup UI tests
+        if: ${{ !cancelled() }}
+        run: ./scripts/test-setup.ps1
+      - name: Upload UI reports and screenshots
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ui-evidence-x64
+          # Only isolated test evidence; never upload the harness executables.
+          path: |
+            build/ui-tests/*/smoke-results*/**/*.json
+            build/ui-tests/*/smoke-results*/**/*.png
+            build/setup-ui-tests/*/result.json
+            build/setup-ui-tests/*/*.png
+          if-no-files-found: warn
+          retention-days: 7
+
+  ci-passed:
+    name: CI passed
+    runs-on: ubuntu-24.04
+    needs: [secret-scan, core-tests, windows-build, ui-tests]
+    if: ${{ always() }}
+    timeout-minutes: 5
+    env:
+      JOB_RESULTS: ${{ join(needs.*.result, ',') }}
+    steps:
+      # A stable required check that also fails when a prerequisite was skipped.
+      - name: Require every check to pass
+        run: |
+          if (($env:JOB_RESULTS -split ',') | Where-Object { $_ -ne 'success' }) {
+            throw "CI did not pass: $env:JOB_RESULTS"
+          }

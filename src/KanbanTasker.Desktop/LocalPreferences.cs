@@ -15,6 +15,10 @@ public sealed class LocalPreferences
     public string Language { get; set; } = "en";
     public string Theme { get; set; } = "system";
     public Guid? SelectedBoard { get; set; }
+    public bool GroupsEnabled { get; set; }
+    public Guid? GroupWorkspaceId { get; set; }
+    // null = all boards, Guid.Empty = ungrouped, any other ID = a particular group.
+    public Guid? SelectedGroup { get; set; }
     public HashSet<Guid> CollapsedColumns { get; set; } = [];
     public static LocalPreferences Load()
     {

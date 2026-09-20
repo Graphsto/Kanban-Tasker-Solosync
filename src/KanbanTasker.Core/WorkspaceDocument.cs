@@ -65,15 +65,18 @@ public sealed class EntityRecord
 
 public sealed class WorkspaceDocument
 {
-    public int SchemaVersion { get; set; } = 1;
+    public const int CurrentSchemaVersion = 2;
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     public Guid DocumentId { get; set; } = Guid.NewGuid();
+    public List<EntityRecord> Groups { get; set; } = [];
     public List<EntityRecord> Boards { get; set; } = [];
     public List<EntityRecord> Columns { get; set; } = [];
     public List<EntityRecord> Tasks { get; set; } = [];
-    [JsonIgnore] public IEnumerable<EntityRecord> Entities => Boards.Concat(Columns).Concat(Tasks);
+    [JsonIgnore] public IEnumerable<EntityRecord> Entities => Groups.Concat(Boards).Concat(Columns).Concat(Tasks);
     public WorkspaceDocument Clone() => new()
     {
         SchemaVersion = SchemaVersion, DocumentId = DocumentId,
+        Groups = Groups.Select(x => x.Clone()).ToList(),
         Boards = Boards.Select(x => x.Clone()).ToList(), Columns = Columns.Select(x => x.Clone()).ToList(),
         Tasks = Tasks.Select(x => x.Clone()).ToList()
     };
@@ -82,6 +85,7 @@ public sealed class WorkspaceDocument
 public static class Fields
 {
     public const string Name = "name", Notes = "notes", Order = "order", Limit = "limit";
+    public const string GroupId = "groupId";
     public const string ColumnId = "columnId", Title = "title", Description = "description";
     public const string Priority = "priority", Tags = "tags", CreatedAt = "createdAt";
     public const string DueDate = "dueDate", DueTime = "dueTime", StartDate = "startDate", FinishDate = "finishDate";

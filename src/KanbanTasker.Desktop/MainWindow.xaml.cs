@@ -56,7 +56,11 @@ public sealed partial class MainWindow : Window
             StatusText.Text = T("Loading boards…");
         }
         CenterStartupWindow();
-        Root.SizeChanged += (_, _) => TaskPane.DisplayMode = Root.ActualWidth >= 1100 ? SplitViewDisplayMode.Inline : SplitViewDisplayMode.Overlay;
+        Root.SizeChanged += (_, _) =>
+        {
+            TaskPane.DisplayMode = Root.ActualWidth >= 1100 ? SplitViewDisplayMode.Inline : SplitViewDisplayMode.Overlay;
+            UpdateGroupSelectorLayout();
+        };
         Activated += async (_, args) =>
         {
             if (loaded && args.WindowActivationState != WindowActivationState.Deactivated) await store.RefreshAsync();
@@ -136,7 +140,7 @@ public sealed partial class MainWindow : Window
     {
         document = store.Current;
         rendering = true;
-        var boards = document is null ? [] : WorkspaceView.Boards(document).Select(x => new Choice(x.Id, x.Get<string>(Fields.Name))).ToArray();
+        var boards = RenderGroupPicker();
         if (!boards.Any(x => x.Id == boardId)) boardId = boards.FirstOrDefault()?.Id;
         BoardPicker.ItemsSource = boards;
         BoardPicker.SelectedItem = boards.FirstOrDefault(x => x.Id == boardId);
@@ -147,10 +151,12 @@ public sealed partial class MainWindow : Window
         WelcomePanel.Visibility = boardId is null ? Visibility.Visible : Visibility.Collapsed;
         WelcomeActions.Visibility = document is null ? Visibility.Visible : Visibility.Collapsed;
         EmptyBoardButton.Visibility = document is not null ? Visibility.Visible : Visibility.Collapsed;
-        WelcomeTitle.Text = document is null ? T("Your boards, in one local file") : T("Ready for your first board");
+        var emptyGroup = document is not null && preferences.GroupsEnabled && preferences.SelectedGroup is not null;
+        WelcomeTitle.Text = document is null ? T("Your boards, in one local file") : emptyGroup ? T("No boards in this group") : T("Ready for your first board");
         WelcomeText.Text = document is null
             ? T("Create a data file or open an existing one. Choose a locally available Nextcloud folder to use the same boards on your other devices.")
-            : T("Create a board to start organizing your tasks.");
+            : emptyGroup ? T("Create a board here or choose another group.") : T("Create a board to start organizing your tasks.");
+        EmptyBoardButton.Content = emptyGroup ? T("New board") : T("Create your first board");
         PathText.Text = store.FilePath ?? T("Choose a local data file to get started.");
         ToolTipService.SetToolTip(PathText, store.FilePath ?? "");
         StatusText.Text = store.Status.State switch

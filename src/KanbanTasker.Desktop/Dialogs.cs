@@ -26,10 +26,17 @@ public sealed partial class MainWindow
         var board = document?.Boards.FirstOrDefault(x => x.Id == id);
         var originalName = board?.Get<string>(Fields.Name) ?? "";
         var originalNotes = board?.Get<string>(Fields.Notes) ?? "";
+        var originalGroup = board is null ? null : WorkspaceView.BoardGroupId(document!, board);
+        var selectedGroup = board is not null ? originalGroup
+            : preferences.GroupsEnabled && preferences.SelectedGroup != Guid.Empty ? preferences.SelectedGroup : null;
+        var group = new ComboBox { Name = "BoardGroupAssignment", Header = T("Board group"), DisplayMemberPath = "Name",
+            HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = BoardGroupChoices(document!),
+            Visibility = preferences.GroupsEnabled ? Visibility.Visible : Visibility.Collapsed };
+        group.SelectedItem = ((IEnumerable<GroupChoice>)group.ItemsSource).FirstOrDefault(g => g.Id == selectedGroup);
         var name = new TextBox { Header = T("Board name"), Text = originalName, MinWidth = 320 };
         var notes = new TextBox { Header = T("Notes"), Text = originalNotes, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 100 };
         var error = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 400 };
-        var fields = new StackPanel { Spacing = 14 }; fields.Children.Add(name); fields.Children.Add(notes); fields.Children.Add(error);
+        var fields = new StackPanel { Spacing = 14 }; fields.Children.Add(name); fields.Children.Add(group); fields.Children.Add(notes); fields.Children.Add(error);
         var dialog = Dialog(id is null ? T("New board") : T("Edit board"), fields, T("Save"));
         dialog.Opened += (_, _) => name.Focus(FocusState.Programmatic);
         dialog.PrimaryButtonClick += async (_, args) =>
@@ -37,11 +44,20 @@ public sealed partial class MainWindow
             var deferral = args.GetDeferral();
             try
             {
+                var destinationGroup = preferences.GroupsEnabled ? (group.SelectedItem as GroupChoice)?.Id : originalGroup;
+                var savedBoard = id;
                 await store.CommitAsync(editor =>
                 {
-                    if (id is null) boardId = editor.CreateBoard(name.Text, notes.Text);
-                    else editor.EditBoard(id.Value, name.Text, notes.Text, originalName, originalNotes);
+                    if (id is null) savedBoard = editor.CreateBoard(name.Text, notes.Text, destinationGroup);
+                    else
+                    {
+                        editor.EditBoard(id.Value, name.Text, notes.Text, originalName, originalNotes);
+                        // Preserve incoming reassignments when this form did not change its group.
+                        if (destinationGroup != originalGroup) editor.AssignBoardGroup(id.Value, destinationGroup);
+                    }
                 });
+                boardId = savedBoard;
+                if (savedBoard is { } boardToReveal) RevealBoardGroup(boardToReveal);
                 Render();
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException or InvalidOperationException or UnauthorizedAccessException)

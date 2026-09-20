@@ -17,6 +17,7 @@ public sealed partial class MainWindow
     {
         var general = new StackPanel { Spacing = 16, Padding = new(0,8,12,12) };
         var appearance = new StackPanel { Spacing = 16, Padding = new(0,8,12,12) };
+        var advanced = new StackPanel { Spacing = 16, Padding = new(0,8,12,12) };
         var tabs = new Pivot { Name = "SettingsTabs", MaxWidth = 460, MinWidth = 320, Height = Math.Clamp(Root.ActualHeight - 240, 240, 520) };
         ScrollViewer Page(StackPanel panel) => new()
         {
@@ -25,16 +26,22 @@ public sealed partial class MainWindow
         };
         var generalTab = new PivotItem { Content = Page(general) };
         var appearanceTab = new PivotItem { Content = Page(appearance) };
-        tabs.Items.Add(generalTab); tabs.Items.Add(appearanceTab); tabs.SelectedIndex = 0;
+        var advancedTab = new PivotItem { Content = Page(advanced) };
+        tabs.Items.Add(generalTab); tabs.Items.Add(appearanceTab); tabs.Items.Add(advancedTab); tabs.SelectedIndex = 0;
         bool? create = null;
         var updateSelected = false;
         var dialog = Dialog(T("Settings"), tabs);
         settingsDialog = dialog;
+        var advancedBusy = false;
+        Action? refreshGroups = null;
+        dialog.Closing += (_, args) => args.Cancel = advancedBusy;
         void Populate()
         {
-            general.Children.Clear(); appearance.Children.Clear();
+            general.Children.Clear(); appearance.Children.Clear(); advanced.Children.Clear();
             dialog.Title = T("Settings"); dialog.CloseButtonText = T("Close"); dialog.Language = text.Culture.Name;
             generalTab.Header = T("General"); appearanceTab.Header = T("Appearance");
+            advancedTab.Header = T("Advanced");
+            refreshGroups = PopulateAdvancedSettings(advanced, busy => { advancedBusy = busy; dialog.IsEnabled = !busy; });
             ApplyDialogAppearance(dialog);
             void Heading(StackPanel panel, string label) => panel.Children.Add(new TextBlock
                 { Text = label, Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"] });
@@ -116,8 +123,13 @@ public sealed partial class MainWindow
             appearance.Children.Add(error);
         }
         Populate();
+        EventHandler groupsChanged = (_, _) => DispatcherQueue.TryEnqueue(() =>
+        {
+            if (settingsDialog == dialog) refreshGroups?.Invoke();
+        });
+        store.Changed += groupsChanged;
         try { await dialog.ShowAsync(); }
-        finally { settingsDialog = null; }
+        finally { store.Changed -= groupsChanged; settingsDialog = null; }
         if (create is { } newFile) await SelectFileAsync(newFile);
         else if (updateSelected) await SelectUpdateAsync();
     });

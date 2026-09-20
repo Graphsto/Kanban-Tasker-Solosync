@@ -1,0 +1,74 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    # The current personal private repository has no Code Security entitlement.
+    # Publishing the repository enables these jobs. An eligible private fork
+    # can opt in only after its administrator enables licensed Code Security.
+    if: ${{ github.event.repository.private == false || vars.CODEQL_ENABLED == 'true' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: csharp
+            os: windows-2025
+            build-mode: manual
+          - language: actions
+            os: ubuntu-24.04
+            build-mode: none
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up .NET
+        if: ${{ matrix.language == 'csharp' }}
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+      - name: Build all C# projects for analysis
+        if: ${{ matrix.language == 'csharp' }}
+        run: |
+          dotnet restore KanbanTasker.sln --locked-mode -p:Platform=x64
+          if ($LASTEXITCODE) { throw 'CodeQL restore failed.' }
+          dotnet build KanbanTasker.sln --no-restore --no-incremental -c Release -p:Platform=x64 -p:UseSharedCompilation=false
+          if ($LASTEXITCODE) { throw 'CodeQL build failed.' }
+      - name: Analyze and upload findings
+        uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          category: '/language:${{ matrix.language }}'

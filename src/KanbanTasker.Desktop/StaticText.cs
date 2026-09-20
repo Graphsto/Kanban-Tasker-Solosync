@@ -10,6 +10,8 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(AppLogo, T("Kanban Tasker logo"));
         BoardPicker.PlaceholderText = T("Choose a board");
         AutomationProperties.SetName(BoardPicker, T("Board"));
+        AutomationProperties.SetName(GroupPicker, T("Board group"));
+        ToolTipService.SetToolTip(GroupPicker, T("Board group"));
         NewBoardButton.Content = T("New board");
         ToolTipService.SetToolTip(NewBoardButton, T("Create a board"));
         CalendarButton.Content = T("Calendar");

@@ -280,7 +280,7 @@ public sealed partial class MainWindow
             var settings = VisualTreeHelper.GetOpenPopupsForXamlRoot(Root.XamlRoot)
                 .Select(p => FindVisual<ContentDialog>(p.Child)).First(x => x is not null)!;
             var tabs = (Pivot)settings.Content;
-            Check(tabs.SelectedIndex == 0 && tabs.Items.Count == 2, "Settings opens on General with exactly two sections");
+            Check(tabs.SelectedIndex == 0 && tabs.Items.Count == 3, "Settings opens on General with Appearance and Advanced sections");
             await CaptureAsync("settings-general", settings);
             tabs.SelectedIndex = 1;
             await SettleAsync();
@@ -426,6 +426,7 @@ public sealed partial class MainWindow
             await WaitForAsync(() => !working);
             Check(TaskPane.IsPaneOpen && originalTask?.Id == taskId, "Choosing a calendar task opens its editor");
             CloseEditor();
+            await CheckBoardGroupsAsync(Check, CaptureAsync);
             await File.WriteAllTextAsync(Path.Combine(output, "result.json"), JsonSerializer.Serialize(new { success = true, checks }, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch (Exception ex)

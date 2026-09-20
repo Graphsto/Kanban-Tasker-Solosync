@@ -106,6 +106,19 @@ public sealed partial class MainWindow
         await Capture("appearance", FindVisual<Border>(settings, "BackgroundElement")!);
         settings.Hide(); await WaitForAsync(() => !working);
 
+        Guid group = default;
+        await store.CommitAsync(editor =>
+        {
+            group = editor.CreateGroup("Projects");
+            var personal = editor.CreateGroup("Personal");
+            foreach (var board in WorkspaceView.Boards(editor.Document))
+                editor.AssignBoardGroup(board.Id, board.Id == boardId ? group : personal);
+        });
+        preferences.GroupsEnabled = true;
+        preferences.SelectedGroup = group;
+        Render(); await SettleAsync();
+        await Capture("board-groups");
+
         async Task Capture(string name, FrameworkElement? target = null)
         {
             if (ErrorBar.IsOpen) throw new InvalidOperationException("Do not publish a showcase with an app error.");

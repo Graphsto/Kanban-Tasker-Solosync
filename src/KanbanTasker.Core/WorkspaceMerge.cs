@@ -12,6 +12,7 @@ public static class WorkspaceMerge
         return new()
         {
             DocumentId = left.DocumentId, SchemaVersion = left.SchemaVersion,
+            Groups = MergeEntities(left.Groups, right.Groups),
             Boards = MergeEntities(left.Boards, right.Boards), Columns = MergeEntities(left.Columns, right.Columns),
             Tasks = MergeEntities(left.Tasks, right.Tasks)
         };
@@ -44,6 +45,14 @@ public static class WorkspaceMerge
 
 public static class WorkspaceView
 {
+    public static IEnumerable<EntityRecord> Groups(WorkspaceDocument d) => d.Groups
+        .Where(x => x.Deleted is null).OrderBy(x => x.Created).ThenBy(x => x.Id);
+    // A deleted group is only a deleted label, never a deleted board or task.
+    // Resolve concurrent assignments to a deleted group as ungrouped too.
+    public static Guid? BoardGroupId(WorkspaceDocument d, EntityRecord board) =>
+        board.Get<Guid?>(Fields.GroupId) is { } id && Groups(d).Any(x => x.Id == id) ? id : null;
+    public static IEnumerable<EntityRecord> BoardsInGroup(WorkspaceDocument d, Guid? groupId) =>
+        Boards(d).Where(x => BoardGroupId(d, x) == groupId);
     public static IEnumerable<EntityRecord> Boards(WorkspaceDocument d) => d.Boards
         .Where(x => x.Deleted is null).OrderBy(x => x.Created).ThenBy(x => x.Id);
     public static IEnumerable<EntityRecord> Columns(WorkspaceDocument d, Guid boardId)
