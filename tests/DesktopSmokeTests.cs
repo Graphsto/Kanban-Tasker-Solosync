@@ -30,6 +30,11 @@ internal static class SmokeProfile
         // Otherwise conflict discovery reads preferences while the UI test replaces that file.
         var workspaceDirectory = Path.Combine(DirectoryPath, "Workspace");
         Directory.CreateDirectory(workspaceDirectory);
+        if (Scenario == "showcase")
+        {
+            ShowcaseProfile.Initialize(workspaceDirectory);
+            return;
+        }
         if (Scenario != "workspace")
         {
             var preferences = new LocalPreferences();
@@ -78,16 +83,26 @@ public sealed partial class MainWindow
     private async Task RunDesktopSmokeTestsAsync()
     {
         SmokeProfile.Trace("Root loaded");
+        // This harness invokes controls directly and uses synthetic drags without an
+        // OS pointer. Incidental mouse movement must not enter those drag handlers.
+        Root.IsHitTestVisible = false;
         var checks = new List<string>();
         var output = SmokeProfile.DirectoryPath;
         try
         {
             await WaitForAsync(() => SmokeProfile.FirstFrameSeen);
+            if (SmokeProfile.Scenario == "showcase")
+            {
+                await CaptureShowcaseAsync(CaptureAsync);
+                await File.WriteAllTextAsync(Path.Combine(output, "result.json"), JsonSerializer.Serialize(new { success = true }));
+                return;
+            }
             Check(SmokeProfile.WindowWasHiddenBeforeLoaded && Root.IsLoaded && AppWindow.IsVisible,
                 "The window becomes visible only after its XAML shell is loaded");
             Check(Root.Background is SolidColorBrush { Color.A: 255 }, "Startup shell has an opaque theme background");
             Check(!EditorLoaded && EditorSurface is null, "Startup does not construct the hidden task editor");
             CloseEditor();
+            Check(!TaskbarPinNotice.IsOpen, "Ordinary startup never asks to pin the app");
             if (SmokeProfile.Scenario != "workspace")
             {
                 Check(document is null && WelcomePanel.Visibility == Visibility.Visible, "Startup without a valid workspace shows the welcome screen");
@@ -105,6 +120,42 @@ public sealed partial class MainWindow
             }
             Check(document is not null && WorkspaceView.AllTasks(document).Count() == 30,
                 "Startup opens the saved workspace without opening the task editor");
+            Check(TaskbarPinning.IsRequested("--pin-to-taskbar")
+                && TaskbarPinning.IsRequested("\"C:\\Program Files\\KanbanTasker.exe\" --pin-to-taskbar")
+                && !TaskbarPinning.IsRequested("\"C:\\Folder --pin-to-taskbar\\app.exe\"")
+                && !TaskbarPinning.IsRequested("--pin-to-taskbar-other") && !TaskbarPinning.IsRequested(null),
+                "Pinning activation parses exact arguments, including redirected command lines");
+            var pinRequests = 0;
+            getTaskbarPinState = () => Task.FromResult(TaskbarPinState.Available);
+            requestTaskbarPin = () => { pinRequests++; return Task.FromResult(false); };
+            OfferTaskbarPinning(); await SettleAsync();
+            Check(TaskbarPinNotice.IsOpen && PinToTaskbarButton.Visibility == Visibility.Visible && pinRequests == 0,
+                "Installer activation offers pinning without opening a Windows prompt automatically");
+            Invoke(PinToTaskbarButton); await SettleAsync();
+            Check(pinRequests == 1 && TaskbarPinNotice.IsOpen && PinToTaskbarButton.Visibility == Visibility.Collapsed,
+                "A declined or unavailable Windows prompt shows manual instructions without retrying");
+            foreach (var language in TextCatalog.Languages)
+            {
+                text = new(language.Code); ApplyLanguage();
+                Check(TaskbarPinNotice.Title == T("Pin to taskbar") && TaskbarPinNotice.Message == T("To pin the app manually, right-click the Kanban Tasker icon on the taskbar and choose Pin to taskbar."),
+                    "Taskbar instructions switch language: " + language.Code);
+            }
+            text = new("en"); ApplyLanguage();
+            getTaskbarPinState = () => Task.FromResult(TaskbarPinState.Pinned);
+            OfferTaskbarPinning(); await SettleAsync();
+            Check(!TaskbarPinNotice.IsOpen && pinRequests == 1, "An already pinned app is not prompted again");
+            getTaskbarPinState = () => Task.FromResult(TaskbarPinState.Manual);
+            OfferTaskbarPinning(); await SettleAsync();
+            Check(TaskbarPinNotice.IsOpen && PinToTaskbarButton.Visibility == Visibility.Collapsed, "Unsupported Windows versions offer manual pinning");
+            getTaskbarPinState = () => Task.FromResult(TaskbarPinState.Available);
+            requestTaskbarPin = () => Task.FromResult(true);
+            OfferTaskbarPinning(); await SettleAsync(); Invoke(PinToTaskbarButton); await SettleAsync();
+            Check(TaskbarPinNotice.Severity == InfoBarSeverity.Success && PinToTaskbarButton.Visibility == Visibility.Collapsed,
+                "A confirmed pin is shown as successful");
+            TaskbarPinNotice.IsOpen = false;
+            // Probe platform support without requesting or changing the real taskbar.
+            Check(Enum.IsDefined(await TaskbarPinning.GetStateAsync()), "Native taskbar capability probe handles this Windows environment");
+            getTaskbarPinState = TaskbarPinning.GetStateAsync; requestTaskbarPin = TaskbarPinning.RequestAsync;
             await Task.Delay(350);
             preferences.Theme = "light"; ApplyAppearance();
             await store.CreateAsync(Path.Combine(output, "Workspace", "test-" + Guid.NewGuid().ToString("N") + ".json"));
@@ -130,6 +181,37 @@ public sealed partial class MainWindow
             Check(!HasDraftChanges && unchanged.IsCompletedSuccessfully && unchanged.Result, "Opening an existing task does not prompt on cancel");
             CancelTask_Click(this, new RoutedEventArgs());
             Check(!TaskPane.IsPaneOpen, "Cancel closes an unchanged task immediately");
+            await OpenEditorAsync(taskId, firstColumn);
+            TaskTitle.Text = "Draft after a blocked recovery write";
+            var recoveryFile = Path.Combine(LocalPreferences.DirectoryPath, "Recovery", $"{document!.DocumentId:N}.recovery.json");
+            using (var reader = new FileStream(recoveryFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                SaveTask_Click(this, new RoutedEventArgs());
+                await WaitForAsync(() => !working);
+                Check(TaskPane.IsPaneOpen && HasDraftChanges && taskSaveFailed && DraftNotice.IsOpen
+                    && DraftNotice.Severity == InfoBarSeverity.Warning && store.Status.State == StorageState.Error,
+                    "A persistent real recovery-file lock keeps the failed task draft and warning visible");
+                Check(store.Current!.Tasks.Single(t => t.Id == taskId).Get<string>(Fields.Title) == "Visible card — 日本語",
+                    "Failed recovery writes do not falsely accept a task edit");
+            }
+            await store.RefreshAsync(); Render(); await SettleAsync();
+            Check(store.Status.State == StorageState.Saved && TaskPane.IsPaneOpen && taskSaveFailed && DraftNotice.IsOpen
+                && TaskTitle.Text == "Draft after a blocked recovery write",
+                "A successful background refresh cannot hide or replace the failed unsaved draft");
+            foreach (var language in TextCatalog.Languages)
+            {
+                text = new(language.Code); ApplyLanguage();
+                Check(DraftNotice.Message == T("Your last save did not complete. Your draft is still here. Select Save to try again."),
+                    "Failed-save notice remains translated after refresh: " + language.Code);
+            }
+            text = new("en"); ApplyLanguage();
+            SaveTask_Click(this, new RoutedEventArgs()); await WaitForAsync(() => !working);
+            Check(!TaskPane.IsPaneOpen && !taskSaveFailed
+                && store.Current!.Tasks.Single(t => t.Id == taskId).Get<string>(Fields.Title) == "Draft after a blocked recovery write",
+                "Explicitly saving again after unlock persists the draft and clears its failed-save state");
+            await OpenEditorAsync(taskId, firstColumn);
+            TaskTitle.Text = "Visible card — 日本語";
+            SaveTask_Click(this, new RoutedEventArgs()); await WaitForAsync(() => !working);
             await OpenEditorAsync(taskId, firstColumn);
             var originalTitle = TaskTitle.Text;
             var originalDescription = TaskDescription.Text;

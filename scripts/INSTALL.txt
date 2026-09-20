@@ -10,7 +10,14 @@ Kanban Tasker installieren
 3. Den Windows-Administratorhinweis fuer das lokale Herausgeberzertifikat
    bestaetigen. Das ist auf jedem Rechner einmal erforderlich.
 
-4. "Finish" anklicken. Kanban Tasker steht danach im Windows-Startmenue.
+4. Abschlussoptionen waehlen und "Finish" anklicken:
+   - Desktop-Verknuepfung und App-Start sind vorausgewaehlt.
+   - Der Eintrag im Windows-Startmenue wird automatisch erstellt.
+   - "Add to taskbar" oeffnet die App zum Anheften. Dort auf den
+     Anheften-Button klicken und die Windows-Rueckfrage bestaetigen.
+     Falls Windows das nicht unterstuetzt: Rechtsklick auf das App-Symbol
+     in der Taskleiste und "An Taskleiste anheften" waehlen.
+   Das Schliessen ueber das X fuehrt diese optionalen Aktionen nicht aus.
 
 Die EXE enthaelt App, Zertifikat und Laufzeit. Es sind keine PS1-Datei,
 kein PowerShell 7 und keine separat installierte .NET-Laufzeit notwendig.

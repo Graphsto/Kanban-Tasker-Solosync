@@ -121,6 +121,7 @@ public sealed partial class MainWindow : Window
         SmokeProfile.Trace("Initial workspace opened");
 #endif
         Render();
+        if (taskbarPinPending) await ShowTaskbarPinOfferAsync();
 #if KANBAN_UI_SMOKE_TEST
         await RunDesktopSmokeTestsAsync();
 #endif

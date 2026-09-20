@@ -27,7 +27,12 @@
                 <Button x:Name="SettingsButton" Click="Settings_Click" AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings"><SymbolIcon Symbol="Setting"/></Button>
             </StackPanel>
         </Grid>
-        <InfoBar x:Name="ErrorBar" Grid.Row="1" Severity="Error" IsOpen="False" IsClosable="True" Margin="16,0,16,8"/>
+        <StackPanel Grid.Row="1">
+            <InfoBar x:Name="ErrorBar" Severity="Error" IsOpen="False" IsClosable="True" Margin="16,0,16,8"/>
+            <InfoBar x:Name="TaskbarPinNotice" IsOpen="False" IsClosable="True" Margin="16,0,16,8">
+                <InfoBar.ActionButton><Button x:Name="PinToTaskbarButton" Click="PinToTaskbar_Click"/></InfoBar.ActionButton>
+            </InfoBar>
+        </StackPanel>
         <SplitView x:Name="TaskPane" Grid.Row="2" PanePlacement="Right" DisplayMode="Inline" OpenPaneLength="380" IsPaneOpen="False">
             <SplitView.Pane>
                 <ContentControl x:Name="EditorHost" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>

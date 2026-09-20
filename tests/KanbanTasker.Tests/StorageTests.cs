@@ -184,6 +184,143 @@ public sealed class StorageTests : IDisposable
         Assert.Equal(original, await File.ReadAllBytesAsync(FilePath));
         Assert.Empty(Directory.EnumerateFiles(Path.GetDirectoryName(FilePath)!, "*.tmp"));
     }
+    [Theory]
+    [InlineData(false, 0x20)] [InlineData(false, 0x21)] [InlineData(false, 0x497)]
+    [InlineData(true, 0x20)] [InlineData(true, 0x497)] [InlineData(true, 5)]
+    public async Task BriefWriteLockIsRetriedWithoutReplayingTheActionOrReportingAnError(bool recovery, int code)
+    {
+        await SeedAsync();
+        var writer = new TransientWriter(FilePath, recovery, code);
+        await using var store = Store(writer: writer); await store.OpenAsync(FilePath);
+        var statuses = new System.Collections.Concurrent.ConcurrentQueue<StorageState>();
+        store.Changed += (_, _) => statuses.Enqueue(store.Status.State);
+        writer.Failures = 2;
+        var edits = 0;
+        await store.CommitAsync(editor => { edits++; editor.CreateBoard("Saved after a short lock"); });
+        Assert.Equal(1, edits);
+        Assert.Equal(2, writer.FailedAttempts);
+        Assert.Equal(StorageState.Saved, store.Status.State);
+        Assert.DoesNotContain(StorageState.Error, statuses);
+        Assert.Equal(2, WorkspaceJson.Parse(await File.ReadAllBytesAsync(FilePath)).Boards.Count);
+        Assert.True(WorkspaceJson.Equal(store.Current!, WorkspaceJson.Parse(await File.ReadAllBytesAsync(FilePath))));
+    }
+    [Fact]
+    public async Task PublicationRetryRereadsChangesThatArriveDuringTheWait()
+    {
+        await SeedAsync();
+        var incoming = WorkspaceJson.Parse(await File.ReadAllBytesAsync(FilePath));
+        var clock = new ChangeClock(Guid.NewGuid()); clock.Observe(incoming);
+        new WorkspaceEditor(incoming, clock).CreateBoard("Arrived during the retry");
+        var writer = new TransientWriter(FilePath, false, 0x497);
+        await using var store = Store(writer: writer); await store.OpenAsync(FilePath);
+        writer.Failures = 1;
+        writer.BeforeFailure = () => File.WriteAllBytesAsync(FilePath, WorkspaceJson.Serialize(incoming));
+        await store.CommitAsync(editor => editor.CreateBoard("Local action"));
+        var saved = WorkspaceJson.Parse(await File.ReadAllBytesAsync(FilePath));
+        Assert.Equal(3, saved.Boards.Count);
+        Assert.Equal(StorageState.Saved, store.Status.State);
+    }
+    [Theory]
+    [InlineData(true)] [InlineData(false)]
+    public async Task InvalidOrMissingFileArrivingDuringRetryIsNeverOverwritten(bool missing)
+    {
+        await SeedAsync();
+        var writer = new TransientWriter(FilePath, false, 0x497);
+        await using var store = Store(writer: writer); await store.OpenAsync(FilePath);
+        writer.Failures = 1;
+        writer.BeforeFailure = async () =>
+        {
+            if (missing) File.Delete(FilePath); else await File.WriteAllTextAsync(FilePath, "{broken");
+        };
+        await store.CommitAsync(editor => editor.CreateBoard("Durable local action"));
+        Assert.Equal(StorageState.Error, store.Status.State);
+        Assert.Equal(2, store.Current!.Boards.Count);
+        if (missing) Assert.False(File.Exists(FilePath)); else Assert.Equal("{broken", await File.ReadAllTextAsync(FilePath));
+    }
+    [Fact]
+    public async Task PersistentRecoveryLockFailsAfterBoundedRetriesWithoutAcceptingTheEdit()
+    {
+        await SeedAsync(); var before = await File.ReadAllBytesAsync(FilePath);
+        var writer = new TransientWriter(FilePath, true, 0x497);
+        await using var store = Store(writer: writer); await store.OpenAsync(FilePath);
+        writer.Failures = 100;
+        await Assert.ThrowsAsync<IOException>(() => store.CommitAsync(editor => editor.CreateBoard("Not accepted")));
+        Assert.Equal(4, writer.FailedAttempts);
+        Assert.Single(store.Current!.Boards);
+        Assert.Equal(before, await File.ReadAllBytesAsync(FilePath));
+        Assert.StartsWith("Not saved to the data file:", store.Status.Message);
+    }
+    [Fact]
+    public async Task RetryCanBeCancelledBeforeAcceptingTheEdit()
+    {
+        await SeedAsync();
+        var writer = new TransientWriter(FilePath, true, 0x497);
+        await using var store = Store(writer: writer); await store.OpenAsync(FilePath);
+        using var cancellation = new CancellationTokenSource();
+        writer.Failures = 100;
+        writer.BeforeFailure = () => { cancellation.Cancel(); return Task.CompletedTask; };
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.CommitAsync(editor => editor.CreateBoard("Cancelled"), cancellation.Token));
+        Assert.Equal(1, writer.FailedAttempts);
+        Assert.Single(store.Current!.Boards);
+        Assert.Single(WorkspaceJson.Parse(await File.ReadAllBytesAsync(FilePath)).Boards);
+    }
+    [Fact]
+    public async Task PermanentDiskErrorIsNotRetried()
+    {
+        await SeedAsync();
+        var writer = new TransientWriter(FilePath, true, 0x70);
+        await using var store = Store(writer: writer); await store.OpenAsync(FilePath);
+        writer.Failures = 100;
+        await Assert.ThrowsAsync<IOException>(() => store.CommitAsync(editor => editor.CreateBoard("Disk full")));
+        Assert.Equal(1, writer.FailedAttempts);
+    }
+    [Theory]
+    [InlineData(true)] [InlineData(false)]
+    public async Task RealWindowsReaderWithoutDeleteSharingOnlyDelaysTheSave(bool recovery)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        await SeedAsync();
+        var writer = new UnlockAfterFailureWriter();
+        await using var store = Store(writer: writer); await store.OpenAsync(FilePath);
+        var path = recovery ? Path.Combine(root, "recovery-a", $"{store.Current!.DocumentId:N}.recovery.json") : FilePath;
+        using var handle = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        writer.Unlock = handle.Dispose;
+        await store.CommitAsync(editor => editor.CreateBoard("Real Windows lock"));
+        Assert.NotNull(writer.Error);
+        Assert.True(writer.Error.HResult is unchecked((int)0x80070497) or unchecked((int)0x80070020), writer.Error.ToString());
+        Assert.Equal(StorageState.Saved, store.Status.State);
+        Assert.Equal(2, WorkspaceJson.Parse(await File.ReadAllBytesAsync(FilePath)).Boards.Count);
+        Assert.Empty(Directory.EnumerateFiles(root, "*.tmp", SearchOption.AllDirectories));
+    }
+    private sealed class UnlockAfterFailureWriter : IAtomicFileWriter
+    {
+        public Action? Unlock;
+        public IOException? Error;
+        public async Task WriteAsync(string path, ReadOnlyMemory<byte> bytes, bool replace, CancellationToken ct)
+        {
+            try { await new AtomicFileWriter().WriteAsync(path, bytes, replace, ct); }
+            catch (IOException ex)
+            {
+                Error = ex; Unlock?.Invoke(); Unlock = null;
+                throw;
+            }
+        }
+    }
+    private sealed class TransientWriter(string target, bool recovery, int code) : IAtomicFileWriter
+    {
+        public int Failures, FailedAttempts;
+        public Func<Task>? BeforeFailure;
+        public async Task WriteAsync(string path, ReadOnlyMemory<byte> bytes, bool replace, CancellationToken ct)
+        {
+            if (Failures > 0 && (recovery ? path.EndsWith(".recovery.json", StringComparison.Ordinal) : path == target))
+            {
+                Failures--; FailedAttempts++;
+                if (BeforeFailure is not null) await BeforeFailure();
+                throw new IOException("Simulated Windows file error.", unchecked((int)0x80070000) | code);
+            }
+            await new AtomicFileWriter().WriteAsync(path, bytes, replace, ct);
+        }
+    }
     private sealed class FaultWriter(string target) : IAtomicFileWriter
     {
         public bool Fail;

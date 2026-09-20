@@ -216,5 +216,10 @@
   "The package is unsigned.": "Le package n’est pas signé.",
   "Invalid MSIX signature.": "Signature MSIX invalide.",
   "The package signing certificate is missing or ambiguous.": "Le certificat de signature du package est manquant ou ambigu.",
-  "Windows could not verify the update signature (0x{0}). Nothing was started.": "Windows n’a pas pu vérifier la signature de la mise à jour (0x{0}). Rien n’a été lancé."
+  "Windows could not verify the update signature (0x{0}). Nothing was started.": "Windows n’a pas pu vérifier la signature de la mise à jour (0x{0}). Rien n’a été lancé.",
+  "Pin to taskbar": "Épingler à la barre des tâches",
+  "Kanban Tasker is pinned to your taskbar.": "Kanban Tasker est épinglé à votre barre des tâches.",
+  "To pin the app manually, right-click the Kanban Tasker icon on the taskbar and choose Pin to taskbar.": "Pour épingler manuellement l’application, faites un clic droit sur l’icône Kanban Tasker dans la barre des tâches et choisissez Épingler à la barre des tâches.",
+  "Keep Kanban Tasker on your taskbar. Windows will ask you to confirm.": "Gardez Kanban Tasker dans votre barre des tâches. Windows vous demandera de confirmer.",
+  "Your last save did not complete. Your draft is still here. Select Save to try again.": "Le dernier enregistrement a échoué. Votre brouillon est toujours ici. Sélectionnez Enregistrer pour réessayer."
 }

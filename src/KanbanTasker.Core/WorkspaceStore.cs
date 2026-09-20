@@ -137,7 +137,9 @@ public sealed class WorkspaceStore : IWorkspaceStore
             WorkspaceJson.Validate(next);
             if (!WorkspaceJson.Equal(next, current))
             {
-                await SaveRecoveryAsync(next, cancellationToken);
+                // Retry this prepared snapshot, never the editor callback: creating
+                // an entry twice would give it a second ID after a transient failure.
+                await RetryFileAccessAsync(() => SaveRecoveryAsync(next, cancellationToken), cancellationToken);
                 durable = true;
                 current = next;
                 SetStatus(StorageState.Pending, "Saved in local recovery; writing the data file…");
@@ -173,7 +175,8 @@ public sealed class WorkspaceStore : IWorkspaceStore
         }
         finally { gate.Release(); if (changed) Changed?.Invoke(this, EventArgs.Empty); }
     }
-    private async Task ReconcileAsync(CancellationToken ct)
+    private Task ReconcileAsync(CancellationToken ct) => RetryFileAccessAsync(() => ReconcileAttemptAsync(ct), ct);
+    private async Task ReconcileAttemptAsync(CancellationToken ct)
     {
         if (current is null || FilePath is null) return;
         for (var attempt = 0; attempt < 6; attempt++)
@@ -197,6 +200,27 @@ public sealed class WorkspaceStore : IWorkspaceStore
         }
         throw new IOException("The file is changing frequently. Changes are kept in local recovery; retrying automatically.");
     }
+    private static async Task RetryFileAccessAsync(Func<Task> action, CancellationToken ct)
+    {
+        // Windows readers, scanners and sync clients can briefly prevent replacement.
+        // Retry the whole reconciliation so incoming data is read and merged again,
+        // rather than publishing bytes prepared before the wait. Permanent errors
+        // still surface; never delete the destination or fall back to truncating it.
+        int[] delays = [100, 250, 500];
+        for (var attempt = 0; ; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            try { await action(); return; }
+            catch (Exception ex) when (attempt < delays.Length && IsTransientFileAccessError(ex))
+            { await Task.Delay(delays[attempt], ct); }
+        }
+    }
+    private static bool IsTransientFileAccessError(Exception ex) =>
+        ex is IOException or UnauthorizedAccessException && ex.HResult is
+            unchecked((int)0x80070005) or // Access denied (also used for files pending deletion).
+            unchecked((int)0x80070020) or // Sharing violation.
+            unchecked((int)0x80070021) or // Lock violation.
+            unchecked((int)0x80070497);   // Unable to remove the file being replaced.
     private async Task<WorkspaceDocument> MergeSiblingsAsync(WorkspaceDocument document, CancellationToken ct)
     {
         foreach (var path in Directory.EnumerateFiles(Path.GetDirectoryName(FilePath!)!, "*.json", SearchOption.TopDirectoryOnly))

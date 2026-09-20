@@ -17,6 +17,7 @@ public sealed partial class MainWindow
         CultureInfo.CurrentUICulture = text.Culture;
         Microsoft.Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = text.Culture.Name;
         ApplyStaticText();
+        ApplyTaskbarPinText();
         if (EditorLoaded) ApplyEditorLanguage();
         ErrorBar.Title = T("Please check");
         if (ErrorBar.IsOpen && lastErrorMessage is not null) ErrorBar.Message = text.TranslateDiagnostic(lastErrorMessage);

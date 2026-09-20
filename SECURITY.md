@@ -16,5 +16,4 @@ Fixes target the current release; separate maintenance of older test builds is n
 promised. There is no paid support SLA or response-time guarantee.
 
 This is a local solo application, not an account or collaboration service. Files
-are not encrypted by the app. See `docs/privacy.md` for local data locations and
-`docs/release-readiness.md` for the review scope and remaining release gates.
+are not encrypted by the app.

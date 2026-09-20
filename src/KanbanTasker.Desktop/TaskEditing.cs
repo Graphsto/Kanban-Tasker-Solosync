@@ -7,6 +7,7 @@ namespace KanbanTasker.Desktop;
 public sealed partial class MainWindow
 {
     private bool closeEditorRequested;
+    private bool taskSaveFailed;
     private TaskEditorView? taskEditor;
     private bool EditorLoaded => taskEditor is not null;
     private Grid EditorSurface => taskEditor?.EditorSurface!;
@@ -58,6 +59,7 @@ public sealed partial class MainWindow
     {
         if (document is null || boardId is null || !await CanDiscardDraftAsync()) return;
         EnsureEditorLoaded();
+        taskSaveFailed = false;
         originalTask = id is null ? null : TaskData.From(document.Tasks.Single(x => x.Id == id));
         var data = originalTask ?? new TaskData { BoardId = boardId.Value, ColumnId = columnId };
         draftColumnId = columnId; draftBoardId = data.BoardId;
@@ -85,6 +87,13 @@ public sealed partial class MainWindow
         var choices = WorkspaceView.Columns(document, draftBoardId).Select(x => new Choice(x.Id, x.Get<string>(Fields.Name))).ToList();
         if (!choices.Any(x => x.Id == selected)) choices.Add(new(selected, T("Column no longer available")));
         TaskColumn.ItemsSource = choices; TaskColumn.SelectedItem = choices.FirstOrDefault(x => x.Id == selected);
+        if (taskSaveFailed)
+        {
+            DraftNotice.IsOpen = true; DraftNotice.Severity = InfoBarSeverity.Warning;
+            DraftNotice.Message = T("Your last save did not complete. Your draft is still here. Select Save to try again.");
+            return;
+        }
+        DraftNotice.Severity = InfoBarSeverity.Informational;
         if (originalTask is not null)
         {
             var current = WorkspaceView.AllTasks(document).FirstOrDefault(x => x.Id == originalTask.Id);
@@ -108,7 +117,8 @@ public sealed partial class MainWindow
     private async void SaveTask_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
         if (TaskColumn.SelectedItem is not Choice) throw new ArgumentException("Choose a column.");
-        await store.CommitAsync(editor => editor.SaveTask(ReadTaskDraft(), originalTask));
+        try { await store.CommitAsync(editor => editor.SaveTask(ReadTaskDraft(), originalTask)); }
+        catch { taskSaveFailed = true; RefreshDraftContext(); throw; }
         CloseEditor(); Render();
     });
     private async void CancelTask_Click(object sender, RoutedEventArgs e)
@@ -125,6 +135,7 @@ public sealed partial class MainWindow
     private void CloseEditor()
     {
         closeEditorRequested = true;
+        taskSaveFailed = false;
         TaskPane.IsPaneOpen = false; originalTask = null; initialDraft = null; draftTags.Clear();
         if (EditorLoaded) { TaskColumn.SelectedItem = null; TagInput.Text = ""; }
     }

@@ -45,7 +45,15 @@ public partial class App : Application
             return;
         }
         window = new MainWindow();
-        instance.Activated += (_, _) => window.DispatcherQueue.TryEnqueue(window.ActivateWhenReady);
+        instance.Activated += (_, activation) => window.DispatcherQueue.TryEnqueue(() =>
+        {
+            window.ActivateWhenReady();
+            if (activation.Data is Windows.ApplicationModel.Activation.ILaunchActivatedEventArgs launch
+                && TaskbarPinning.IsRequested(launch.Arguments)) window.OfferTaskbarPinning();
+        });
+        if (Environment.GetCommandLineArgs().Skip(1).Contains("--pin-to-taskbar")
+            || AppInstance.GetCurrent().GetActivatedEventArgs().Data is Windows.ApplicationModel.Activation.ILaunchActivatedEventArgs initial
+                && TaskbarPinning.IsRequested(initial.Arguments)) window.OfferTaskbarPinning();
 #endif
     }
 }

@@ -216,5 +216,10 @@
   "The package is unsigned.": "El paquete no está firmado.",
   "Invalid MSIX signature.": "Firma MSIX no válida.",
   "The package signing certificate is missing or ambiguous.": "El certificado de firma del paquete falta o es ambiguo.",
-  "Windows could not verify the update signature (0x{0}). Nothing was started.": "Windows no pudo verificar la firma de la actualización (0x{0}). No se ha iniciado nada."
+  "Windows could not verify the update signature (0x{0}). Nothing was started.": "Windows no pudo verificar la firma de la actualización (0x{0}). No se ha iniciado nada.",
+  "Pin to taskbar": "Anclar a la barra de tareas",
+  "Kanban Tasker is pinned to your taskbar.": "Kanban Tasker está anclado a la barra de tareas.",
+  "To pin the app manually, right-click the Kanban Tasker icon on the taskbar and choose Pin to taskbar.": "Para anclar la aplicación manualmente, haz clic con el botón derecho en el icono de Kanban Tasker en la barra de tareas y elige Anclar a la barra de tareas.",
+  "Keep Kanban Tasker on your taskbar. Windows will ask you to confirm.": "Mantén Kanban Tasker en la barra de tareas. Windows te pedirá confirmación.",
+  "Your last save did not complete. Your draft is still here. Select Save to try again.": "El último intento de guardar falló. Tu borrador sigue aquí. Selecciona Guardar para volver a intentarlo."
 }
