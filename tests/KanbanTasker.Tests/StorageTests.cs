@@ -161,7 +161,7 @@ public sealed class StorageTests : IDisposable
         }
         await store.RefreshAsync(); Assert.Equal(StorageState.Saved, store.Status.State);
     }
-    [Fact]
+    [WindowsFact]
     public async Task ReadOnlyFileDoesNotLosePendingChanges()
     {
         await SeedAsync(); await using var store = Store(); await store.OpenAsync(FilePath);
@@ -317,11 +317,10 @@ public sealed class StorageTests : IDisposable
         await Assert.ThrowsAsync<IOException>(() => store.CommitAsync(editor => editor.CreateBoard("Disk full")));
         Assert.Equal(1, writer.FailedAttempts);
     }
-    [Theory]
+    [WindowsTheory]
     [InlineData(true)] [InlineData(false)]
     public async Task RealWindowsReaderWithoutDeleteSharingOnlyDelaysTheSave(bool recovery)
     {
-        if (!OperatingSystem.IsWindows()) return;
         await SeedAsync();
         var writer = new UnlockAfterFailureWriter();
         await using var store = Store(writer: writer); await store.OpenAsync(FilePath);

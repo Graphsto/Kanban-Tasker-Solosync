@@ -7,7 +7,7 @@ This guide covers working on Kanban Tasker, building a fork and producing local 
 For Windows builds, use:
 
 - Windows 10 or Windows 11, with an interactive desktop for UI tests.
-- The .NET SDK selected by [global.json](global.json): **10.0.302**, or a later patch in the same feature band.
+- The exact .NET SDK selected by [global.json](global.json): **10.0.302**. Automatic SDK roll-forward is disabled because SDK-provided packages such as ILLink are also captured in the lock files. Update the SDK and affected lock files together.
 - Windows SDK **10.0.26100** with `makeappx.exe`, `makepri.exe` and `signtool.exe` for packaging. The packaging script expects its standard installation location.
 - PowerShell 7 for the repository scripts.
 
@@ -80,7 +80,7 @@ A successful build or control test is not full release acceptance. Before distri
 | Check | Scope |
 | --- | --- |
 | Secret scan | Gitleaks scans the checked-out Git history with redacted output. The CLI version and download checksum are pinned; no secret reports are uploaded. |
-| Core tests | Portable tests on Ubuntu 24.04 and Windows Server 2025, using `scripts/test.ps1`. Windows-specific file-lock tests run on Windows. |
+| Core tests | Portable tests on Ubuntu 24.04 and Windows Server 2025, using `scripts/test.ps1`. Tests for Windows read-only attributes and delete-sharing locks run on Windows and are explicitly reported as skipped on Linux. |
 | Windows Release | Desktop and Setup compiled for x64 and ARM64 on Windows Server 2025. ARM64 is a cross-build, not a hardware test. |
 | Windows UI tests | The isolated x64 Desktop and Setup harnesses, using `scripts/test-desktop.ps1` and `scripts/test-setup.ps1`. No app installation or certificate trust changes. |
 | CI passed | A single combined result; every preceding check must succeed. |
