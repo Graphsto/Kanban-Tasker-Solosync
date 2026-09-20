@@ -4,7 +4,7 @@
 
 # Kanban Tasker
 
-A simple Windows kanban app for your own projects. Organise tasks, keep track of due dates and take your boards between devices using one local JSON file. No account required.
+A pragmatic Windows kanban app for your own projects. Organise tasks, keep track of due dates and take your boards between devices using one local JSON file. No account required.
 
 **Windows 10 & 11 · x64 & ARM64 · Five languages · MIT license**
 
@@ -86,4 +86,4 @@ Report bugs and feature requests in [this repository's Issues](https://github.co
 
 There is no account, built-in cloud connection or telemetry service. The workspace is an unencrypted local JSON file; any cloud transfer is handled by the sync provider you choose. Device preferences and recovery data are stored separately in the local app profile.
 
-[MIT licensed](LICENSE). Original application and image assets: copyright 2019 hjohnson12. The original attribution is preserved; this edition is not affiliated with or endorsed by the original author. Dependencies retain their own terms; see [third-party notices](THIRD-PARTY-NOTICES.md).
+[MIT licensed](LICENSE). Original application and image assets: copyright 2019 hjohnson12. [Original Repository](https://github.com/hjo12/kanban-tasker-uwp). The original attribution is preserved; this edition is not affiliated with or endorsed by the original author. Dependencies retain their own terms; see [third-party notices](THIRD-PARTY-NOTICES.md).
