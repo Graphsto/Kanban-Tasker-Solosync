@@ -9,7 +9,7 @@
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                 <Image x:Name="AppLogo" Source="Assets/Logo.png" Width="32" Height="32" AutomationProperties.Name="Kanban Tasker logo"/>
-                <TextBlock Text="Kanban Tasker" Style="{ThemeResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
+                <TextBlock x:Name="AppNameText" Text="Kanban Tasker SoloSync" Style="{ThemeResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
             </StackPanel>
             <Grid x:Name="BoardSelectors" Grid.Column="1" MaxWidth="340" HorizontalAlignment="Stretch">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>

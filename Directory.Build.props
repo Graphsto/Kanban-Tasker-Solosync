@@ -8,8 +8,10 @@
     <ArtifactsPath>$(MSBuildThisFileDirectory)build</ArtifactsPath>
     <UseArtifactsOutput>true</UseArtifactsOutput>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <Version>2.4.1.7</Version>
+    <Version>2.4.1.8</Version>
+    <StorePackageVersion>2.4.1.0</StorePackageVersion>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
   </PropertyGroup>
+  <Import Project="packaging/Distribution.props" />
 </Project>

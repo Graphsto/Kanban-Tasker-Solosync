@@ -275,6 +275,7 @@ public sealed partial class MainWindow
                 await CaptureAsync("language-" + language.Code);
             }
             Check(before.SequenceEqual(WorkspaceJson.Serialize(store.Current!)), "Switching languages never writes workspace data");
+            await CheckDistributionUiAsync(Check, Invoke);
             Settings_Click(this, new RoutedEventArgs());
             await SettleAsync();
             var settings = VisualTreeHelper.GetOpenPopupsForXamlRoot(Root.XamlRoot)

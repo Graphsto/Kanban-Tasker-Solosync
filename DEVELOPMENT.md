@@ -1,13 +1,13 @@
 # Development and contributing
 
-This guide covers working on Kanban Tasker, building a fork and producing local test packages. For the app itself, see the [README](README.md).
+This guide covers working on Kanban Tasker SoloSync, building a fork and producing local test packages. For the app itself, see the [README](README.md). For Store builds and manual release preparation, see [STORE.md](STORE.md).
 
 ## Prerequisites
 
 For Windows builds, use:
 
 - Windows 10 or Windows 11, with an interactive desktop for UI tests.
-- The exact .NET SDK selected by [global.json](global.json): **10.0.302**. Automatic SDK roll-forward is disabled because SDK-provided packages such as ILLink are also captured in the lock files. Update the SDK and affected lock files together.
+- The exact .NET SDK selected by [global.json](global.json): **10.0.401**, delivering self-contained runtime **10.0.12**. Automatic SDK roll-forward is disabled because SDK-provided packages such as ILLink are also captured in the lock files. Update the SDK, runtime acceptance check and affected lock files together.
 - Windows SDK **10.0.26100** with `makeappx.exe`, `makepri.exe` and `signtool.exe` for packaging. The packaging script expects its standard installation location.
 - PowerShell 7 for the repository scripts.
 
@@ -29,6 +29,7 @@ The application targets Windows build 19041 or later; Windows 10 22H2 is the Win
 | `tests/DesktopShowcase.cs` | Fictional data and capture steps for README screenshots. |
 | `tests/SetupSmokeTests.cs` | Installer control tests, without installing the app. |
 | `scripts/` | Build, test, packaging and asset-generation commands. |
+| `packaging/` | Shared Local/Store distribution profiles and supplemental upstream license text. |
 | `branding/` | Source logo and committed documentation screenshots. |
 | `build/` | Generated output; ignored by Git. |
 
@@ -62,7 +63,9 @@ Dependencies are pinned in project files and checked-in `packages.lock.json` fil
 ```powershell
 .\scripts\test.ps1
 .\scripts\test-desktop.ps1
+.\scripts\test-desktop.ps1 -Channel Store
 .\scripts\test-setup.ps1
+node --test .github/scripts/release.test.cjs
 ```
 
 - **Portable tests** exercise merge convergence, field conflicts, ordering, deletion, file failures, recovery, input validation and shared logic. Results: `build/test-results/core-tests.trx`. The core does not require an installed Windows app. On another platform with a compatible .NET SDK, restore `tests/KanbanTasker.Tests/KanbanTasker.Tests.csproj` with `dotnet restore --locked-mode`, then run `dotnet test` on that project with `--no-restore`.
@@ -82,14 +85,15 @@ A successful build or control test is not full release acceptance. Before distri
 | Secret scan | Gitleaks scans the checked-out Git history with redacted output. The CLI version and download checksum are pinned; no secret reports are uploaded. |
 | Core tests | Portable tests on Ubuntu 24.04 and Windows Server 2025, using `scripts/test.ps1`. Tests for Windows read-only attributes and delete-sharing locks run on Windows and are explicitly reported as skipped on Linux. |
 | Windows Release | Desktop and Setup compiled for x64 and ARM64 on Windows Server 2025. ARM64 is a cross-build, not a hardware test. |
-| Windows UI tests | The isolated x64 Desktop and Setup harnesses, using `scripts/test-desktop.ps1` and `scripts/test-setup.ps1`. No app installation or certificate trust changes. |
+| Windows UI tests | The isolated x64 Desktop harness for both Local and Store profiles, plus the Setup harness. Includes Store-launch failure and draft retention tests. No app installation or certificate trust changes. |
+| Store bundle and release policy | Builds and validates the unsigned x64/ARM64 bundle, checks shipped binaries and notices, and tests release gates and safe retries. |
 | CI passed | A single combined result; every preceding check must succeed. |
 
 The workflow selects .NET through `global.json`, restores dependencies in locked mode and caches NuGet packages. It uploads test reports, UI screenshots and build logs for seven days, including available evidence after failures. It does not upload executables, create releases or sign packages. No repository secrets are required. Actions are pinned to full commit hashes; the workflow has read-only repository permissions and does not retain Git credentials.
 
-The [main ruleset](.github/rulesets/main.json) requires **CI passed** from the GitHub Actions app, requires the branch to be up to date, and blocks branch deletion and force pushes. It has no bypass actors. Its initial enforcement is **Disabled** so it cannot block the first workflow push. A matching rule is prepared in this repository's GitHub settings. After pushing the workflows and verifying a successful CI run on the current `main` commit, change this rule to **Active** under **Settings → Rules → Rulesets**. In a fork, import the JSON there first. Subsequent changes should go through a pull request so CI can run before they reach `main`. Keep the check name stable and do not add path filters that could prevent required checks from running.
+The **active** main ruleset requires **CI passed** from GitHub Actions, an up-to-date branch, and blocks branch deletion and force pushes, with no bypass actors. Changes go through pull requests. Keep the check name stable and avoid path filters that could prevent required checks from running. The [ruleset template](.github/rulesets/main.json) starts disabled for bootstrapping a fork; import it, run CI successfully, then activate it in Settings → Rules → Rulesets.
 
-Local validation cannot establish that a GitHub-hosted runner has a working WinUI desktop session. The first hosted run, especially UI startup and rendering, still needs verification. These checks also do not replace Windows 10/11, ARM64 hardware, installation, reminder or real sync-client acceptance tests.
+Hosted Windows CI has exercised the WinUI harness successfully. These checks do not replace Windows 10/11, ARM64 hardware, installation, reminder or real sync-client acceptance tests. Every release must inspect the results for its exact commit.
 
 ## Dependency updates and security checks
 
@@ -99,13 +103,13 @@ The monthly schedule does not control Dependabot security-update PRs. To preserv
 
 [CodeQL](.github/workflows/codeql.yml) analyzes C# and GitHub Actions on pushes and pull requests targeting `main`, weekly, and on manual runs. C# uses an explicit Release build of the solution, including WinUI-generated code, with shared compilation disabled. The workflow uses the `security-extended` queries. The analysis job has `security-events: write` for findings and `actions: read` for private-repository run metadata; other repository access is read-only. This detects potential issues; it is not a full security audit or a promise of a vulnerability-free release.
 
-The repository is currently personal and private, where GitHub Code Security and native Secret Scanning/Push Protection are not available for this repository. CodeQL jobs therefore remain skipped while it is private. They become eligible automatically after a deliberate change to public visibility. An eligible private fork with licensed Code Security already enabled may opt in with the repository Actions variable `CODEQL_ENABLED=true`; setting the variable does not buy or enable the service. Do not enable CodeQL default setup alongside this advanced workflow.
+This repository is public and CodeQL is enabled. A private fork without licensed Code Security skips analysis; an eligible private fork may opt in with the Actions variable `CODEQL_ENABLED=true`. The variable does not buy or enable the service. Do not enable CodeQL default setup alongside this advanced workflow. Release preparation requires successful CodeQL on the exact main commit when the repository is public.
 
-The Gitleaks CI job works while the repository is private and is included in **CI passed**. It detects secrets after a push, so it does not replace GitHub's server-side Push Protection. Update the pinned Gitleaks version and SHA-256 together when adopting a new CLI release. Before public distribution, enable/verify native **Secret scanning** and **Push protection** under **Settings → Advanced Security**. GitHub rejected their activation on the current private repository; they are not currently protecting pushes. No repository visibility, paid security plan or personal notification preferences were changed.
+The Gitleaks job is included in **CI passed**, including in private forks. Update its pinned version and SHA-256 together. Native **Secret scanning**, **Push protection** and **private vulnerability reporting** are enabled in this public repository. Verify them in Settings when creating a fork; these settings are not inherited from source files. Gitleaks detects committed secrets after a push and complements server-side Push Protection.
 
-Signed release packaging should use a separate protected workflow once the public signing and distribution strategy is decided.
+The manual [Prepare release](.github/workflows/release.yml) workflow prepares an unsigned Store submission bundle and unpublished GitHub draft. Microsoft signs the Store distribution. Public EXE signing and a GitHub updater are deferred; see [STORE.md](STORE.md).
 
-## Package and verify
+## Package and verify local test builds
 
 ```powershell
 .\scripts\package.ps1                         # x64 and ARM64
@@ -158,7 +162,7 @@ Small fixes and additions increase only the fourth component, for example `2.4.1
 
 Updates require a higher version and compatible package identity/publisher/signing trust. Replacing a file without increasing its version does not update an installed app. This edition uses identity `KanbanTasker.Revived`, separate from the original Store app.
 
-For an independently distributed fork, choose your own package identity, publisher and signing key. Review `scripts/Package.appxmanifest.template`, the Desktop resource-index identity, installer/update checks, local-profile paths and their tests together; changing only the display name is insufficient. Update repository/support links and branding, preserve the original MIT copyright and license, and retain third-party notices. Do not present a fork as an update signed by this project's publisher.
+For an independently distributed fork, choose your own identity, publisher, Store ID, profile directory and signing strategy in `packaging/Distribution.props`. The manifest, Desktop resource index and app metadata read this common profile. Review installer/update checks, certificate tooling and tests together; changing only the display name is insufficient. Update repository/support links and branding, preserve the original MIT copyright and license, and retain third-party notices. Do not present a fork as an update signed by this project's publisher.
 
 ## Storage and product boundaries
 
@@ -172,7 +176,7 @@ Tasks reference columns by ID. Merge compares UTC milliseconds, logical counter 
 
 [IWorkspaceStore](src/KanbanTasker.Core/WorkspaceStore.cs) serialises access, rereads and merges before publication, and atomically replaces the primary file using a temporary file in the same directory. It retains local recovery and reads matching sibling conflict copies; it does not delete those copies. Semantically unchanged files are not rewritten. Missing, malformed or unsupported primary files must not be replaced with an empty workspace.
 
-Preferences, device identity and recovery live beneath `%LOCALAPPDATA%\KanbanTasker.Revived` (Windows may virtualise this location for packaged apps). Recovery is a latest merged state, not a backup history or a rollback feature. Opening an older copy can merge newer local changes back into it. Plain text edits without updating field stamps are not a supported mutation API; use `WorkspaceEditor` for programmatic changes.
+Preferences, device identity and recovery live beneath `%LOCALAPPDATA%\KanbanTasker.Revived` for Local builds and `%LOCALAPPDATA%\KanbanTasker.SoloSync.Store` for Store builds (Windows may virtualise these locations). Profiles are not automatically migrated. Recovery is a latest merged state, not a backup history or a rollback feature. Opening an older copy can merge newer local changes back into it. Plain text edits without updating field stamps are not a supported mutation API; use `WorkspaceEditor` for programmatic changes.
 
 Protect these invariants when contributing. Keep fixes focused, use artificial test data and add regression tests for data loss or save failures. Explain user-visible behaviour, test results and any remaining manual checks in your pull request. Follow [SECURITY.md](SECURITY.md) for security reports.
 
@@ -200,6 +204,6 @@ The script copies the seven images to `branding/screenshots/`, which is intentio
 
 ## Licenses and release notices
 
-Run `scripts/export-notices.ps1` after restoring dependencies to collect package-provided licenses, notices and `dependencies.json`. Packaging includes these with the app and embedded installer payload. This is a build-input inventory, not an automatic license clearance or a complete binary SBOM.
+Run `scripts/export-notices.ps1` after restoring dependencies to collect package-provided licenses, notices and `dependencies.json`. The Store packager additionally passes its actual payload for SHA-256 attribution of every shipped DLL/EXE in `shipped-binaries.json`, and rejects unknown binaries or absent license texts. Build-input and shipped-binary inventories serve different purposes; neither is automatic legal clearance. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for scope and upstream terms.
 
 Preserve [LICENSE](LICENSE) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Before public distribution, review the actual shipped dependencies and redistribution terms, including native runtime components. Keep release-specific notes with the release rather than adding an implementation history to the user README.

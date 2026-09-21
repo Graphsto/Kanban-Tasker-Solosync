@@ -2,6 +2,8 @@
 # Set default behavior to automatically normalize line endings.
 ###############################################################################
 * text=auto
+# Preserve the upstream license's exact bytes, including its RTF whitespace.
+packaging/licenses/*.rtf binary
 
 ###############################################################################
 # Set default behavior for command prompt diff.

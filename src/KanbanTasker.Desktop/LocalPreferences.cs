@@ -8,7 +8,7 @@ public sealed class LocalPreferences
 #if KANBAN_UI_SMOKE_TEST
         SmokeProfile.DirectoryPath;
 #else
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KanbanTasker.Revived");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), KanbanTasker.Distribution.AppDistribution.ProfileDirectory);
 #endif
     public Guid DeviceId { get; set; } = Guid.NewGuid();
     public string? FilePath { get; set; }

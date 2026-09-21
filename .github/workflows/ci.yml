@@ -138,6 +138,9 @@ jobs:
           cache-dependency-path: '**/packages.lock.json'
       - name: Run isolated Desktop UI tests
         run: ./scripts/test-desktop.ps1
+      - name: Run isolated Store UI tests
+        if: ${{ !cancelled() }}
+        run: ./scripts/test-desktop.ps1 -Channel Store
       - name: Run isolated Setup UI tests
         if: ${{ !cancelled() }}
         run: ./scripts/test-setup.ps1
@@ -155,10 +158,40 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  store-package:
+    name: Store bundle and release policy
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Test release failure and retry handling
+        run: node --test .github/scripts/release.test.cjs
+      - name: Build and validate Store bundle
+        run: ./scripts/package-store.ps1 -OutputDirectory build/store/ci
+      - name: Reject corrupted or incomplete submission artifacts
+        run: ./scripts/test-store-validation.ps1 -Directory build/store/ci
+      - name: Upload reports without submission binaries
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: store-package-evidence
+          path: |
+            build/store/ci/*.json
+            build/store/ci/*.txt
+            build/store/ci/*.log
+            build/store/ci/Notices-*/*.json
+          if-no-files-found: warn
+          retention-days: 7
+
   ci-passed:
     name: CI passed
     runs-on: ubuntu-24.04
-    needs: [secret-scan, core-tests, windows-build, ui-tests]
+    needs: [secret-scan, core-tests, windows-build, ui-tests, store-package]
     if: ${{ always() }}
     timeout-minutes: 5
     env:

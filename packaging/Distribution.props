@@ -1,0 +1,40 @@
+<Project>
+  <PropertyGroup>
+    <KanbanChannel Condition="'$(KanbanChannel)' == ''">Local</KanbanChannel>
+    <KanbanDisplayName>Kanban Tasker SoloSync</KanbanDisplayName>
+    <KanbanStoreId>9P7HG1RBVBW6</KanbanStoreId>
+    <KanbanPrivacyUrl>https://github.com/Graphsto/Kanban-Tasker-Solosync/blob/main/PRIVACY.md</KanbanPrivacyUrl>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(KanbanChannel)' == 'Local'">
+    <KanbanIdentity>KanbanTasker.Revived</KanbanIdentity>
+    <KanbanPublisher>CN=KanbanTasker.Local</KanbanPublisher>
+    <KanbanPublisherDisplayName>Kanban Tasker Local</KanbanPublisherDisplayName>
+    <KanbanPackageVersion>$(Version)</KanbanPackageVersion>
+    <KanbanProfileDirectory>KanbanTasker.Revived</KanbanProfileDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(KanbanChannel)' == 'Store'">
+    <KanbanIdentity>Graphsto.KanbanTaskerSoloSync</KanbanIdentity>
+    <KanbanPublisher>CN=A5B79554-4F59-4D3F-984A-538E871FFD00</KanbanPublisher>
+    <KanbanPublisherDisplayName>Graphsto</KanbanPublisherDisplayName>
+    <KanbanPackageFamilyName>Graphsto.KanbanTaskerSoloSync_vr8jpynpazs8y</KanbanPackageFamilyName>
+    <KanbanPackageVersion>$(StorePackageVersion)</KanbanPackageVersion>
+    <KanbanProfileDirectory>KanbanTasker.SoloSync.Store</KanbanProfileDirectory>
+    <!-- Separate generated XAML, PRI, restore and binary output from local builds. -->
+    <ArtifactsProjectName>$(MSBuildProjectName).Store</ArtifactsProjectName>
+    <DefineConstants>$(DefineConstants);KANBAN_STORE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="DistributionChannel" Value="$(KanbanChannel)" />
+    <AssemblyMetadata Include="PackageIdentity" Value="$(KanbanIdentity)" />
+    <AssemblyMetadata Include="PackagePublisher" Value="$(KanbanPublisher)" />
+    <AssemblyMetadata Include="AppDisplayName" Value="$(KanbanDisplayName)" />
+    <AssemblyMetadata Include="ProfileDirectory" Value="$(KanbanProfileDirectory)" />
+    <AssemblyMetadata Include="StoreId" Value="$(KanbanStoreId)" />
+    <AssemblyMetadata Include="PrivacyUrl" Value="$(KanbanPrivacyUrl)" />
+  </ItemGroup>
+  <Target Name="ValidateDistributionProfile" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(KanbanChannel)' != 'Local' And '$(KanbanChannel)' != 'Store'" Text="KanbanChannel must be Local or Store." />
+    <Error Condition="'$(KanbanChannel)' == 'Store' And '$(KanbanSigningCertificatePath)' != ''" Text="Store builds must not embed a local publisher certificate." />
+    <Error Condition="'$(KanbanChannel)' == 'Store' And '$(MSBuildProjectName)' == 'KanbanTasker.Setup'" Text="The Store profile does not distribute Setup.exe." />
+  </Target>
+</Project>

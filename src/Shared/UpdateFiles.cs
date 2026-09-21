@@ -10,8 +10,8 @@ internal sealed record UpdateFile(Version Version, string Architecture, bool IsS
 
 internal static class UpdateFiles
 {
-    public const string Identity = "KanbanTasker.Revived";
-    public const string Publisher = "CN=KanbanTasker.Local";
+    public static string Identity => Distribution.AppDistribution.Identity;
+    public static string Publisher => Distribution.AppDistribution.Publisher;
 
     public static UpdateDisposition Compare(Version? installed, Version candidate) => installed is null ? UpdateDisposition.Install :
         candidate > installed ? UpdateDisposition.Update : candidate == installed ? UpdateDisposition.AlreadyInstalled : UpdateDisposition.OlderVersion;

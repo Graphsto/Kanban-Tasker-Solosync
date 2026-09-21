@@ -60,10 +60,14 @@ public sealed partial class MainWindow
             general.Children.Add(open); general.Children.Add(fresh);
             Heading(general, T("App updates"));
             general.Children.Add(new TextBlock { Text = T("Installed version: {0}", CurrentVersion), IsTextSelectionEnabled = true });
-            Paragraph(general, T("Select a newer Kanban Tasker Setup.exe or MSIX file stored on this PC."));
-            var update = new Button { Content = T("Install update from file…"), IsEnabled = CanSelectUpdate };
+            var storeChannel = Distribution.AppDistribution.IsStore;
+            Paragraph(general, storeChannel ? T("Microsoft Store manages updates according to your Windows settings.")
+                : T("Select a newer Kanban Tasker Setup.exe or MSIX file stored on this PC."));
+            var update = new Button { Name = "AppUpdateButton", Content = T(storeChannel ? "Update in Microsoft Store" : "Install update from file…"),
+                IsEnabled = storeChannel || CanSelectUpdate };
             update.Click += (_, _) => { updateSelected = true; dialog.Hide(); }; general.Children.Add(update);
-            if (!CanSelectUpdate) Paragraph(general, T("Local updates are available in the installed app."));
+            if (!storeChannel && !CanSelectUpdate) Paragraph(general, T("Local updates are available in the installed app."));
+            general.Children.Add(new HyperlinkButton { Content = T("Privacy policy"), NavigateUri = Distribution.AppDistribution.PrivacyUri });
             general.Children.Add(new TextBlock
             {
                 Text = T("Based on Kanban Tasker by Hunter Johnson. MIT license.\nLocal file edition · No account required."),
@@ -131,6 +135,10 @@ public sealed partial class MainWindow
         try { await dialog.ShowAsync(); }
         finally { store.Changed -= groupsChanged; settingsDialog = null; }
         if (create is { } newFile) await SelectFileAsync(newFile);
-        else if (updateSelected) await SelectUpdateAsync();
+        else if (updateSelected)
+        {
+            if (Distribution.AppDistribution.IsStore) await OpenStoreAsync();
+            else await SelectUpdateAsync();
+        }
     });
 }
