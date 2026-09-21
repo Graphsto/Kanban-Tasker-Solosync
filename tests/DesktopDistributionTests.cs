@@ -46,9 +46,14 @@ public sealed partial class MainWindow
                 await WaitForAsync(() => !working);
                 check(requests[0] == AppDistribution.StoreUri && !closed && TaskPane.IsPaneOpen && HasDraftChanges,
                     "The real Store button opens only the correct product page and keeps an unsaved draft");
-                foreach (var failure in new[] { "unavailable", "exception" })
+                foreach (var failure in new[] { "unavailable", "exception", "access denied" })
                 {
-                    launchStoreUri = _ => failure == "exception" ? throw new COMException("Store unavailable") : Task.FromResult(false);
+                    launchStoreUri = _ => failure switch
+                    {
+                        "exception" => throw new COMException("Store unavailable"),
+                        "access denied" => throw new UnauthorizedAccessException("Store disabled by policy"),
+                        _ => Task.FromResult(false)
+                    };
                     var opening = OpenStoreAsync(); await SettleAsync();
                     var fallback = OpenDialog();
                     check(((StackPanel)fallback.Content).Children.OfType<HyperlinkButton>().Single().NavigateUri == AppDistribution.StoreWebUri,

@@ -15,7 +15,7 @@ public sealed partial class MainWindow
         {
             if (await launchStoreUri(AppDistribution.StoreUri)) return;
         }
-        catch (Exception ex) when (ex is COMException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        catch (Exception ex) when (ex is COMException or InvalidOperationException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
             // A missing/disabled Store is recoverable. Offer an explicit browser link.
         }
