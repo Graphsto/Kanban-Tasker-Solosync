@@ -1,10 +1,10 @@
-param([ValidateSet('x64','arm64')][string]$Architecture = 'x64')
+param([ValidateSet('x64','arm64')][string]$Architecture = 'x64', [ValidateSet('Local','Store')][string]$Channel = 'Local')
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
 $output = Join-Path $repo ("build/ui-tests/{0}" -f [Guid]::NewGuid().ToString('N'))
 Push-Location $repo
 try {
-    dotnet publish src/KanbanTasker.Desktop/KanbanTasker.Desktop.csproj -c Release -r "win-$Architecture" -p:Platform=$Architecture -p:RestoreLockedMode=true -p:KanbanUiSmokeTest=true -o $output
+    dotnet publish src/KanbanTasker.Desktop/KanbanTasker.Desktop.csproj -c Release -r "win-$Architecture" -p:Platform=$Architecture -p:KanbanChannel=$Channel -p:RestoreLockedMode=true -p:KanbanUiSmokeTest=true -o $output
     if ($LASTEXITCODE) { throw 'Desktop test build failed.' }
     $executable = Join-Path $output 'KanbanTasker.exe'
     foreach ($scenario in @('workspace','first-run','missing','invalid')) {

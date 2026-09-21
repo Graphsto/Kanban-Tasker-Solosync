@@ -2,7 +2,7 @@
   <img src="src/KanbanTasker.Desktop/Assets/Logo.png" width="88" alt="Kanban Tasker logo">
 </p>
 
-# Kanban Tasker
+# Kanban Tasker SoloSync
 
 A pragmatic Windows kanban app for your own projects. Organise tasks, keep track of due dates and take your boards between devices using one local JSON file. No account required.
 
@@ -48,11 +48,11 @@ Move a card to another column. Dropping on the heading places it before the firs
 
 ## Installation
 
-Choose the **Setup.exe** matching your PC: **x64** for Intel/AMD, or **ARM64** for Windows on ARM. Close Kanban Tasker, run Setup and follow the prompts. The required runtimes are included.
+The first public version will be available through [Microsoft Store](https://apps.microsoft.com/detail/9P7HG1RBVBW6). **Store publication is still pending.** The required runtimes are included; Microsoft will deliver updates according to your Windows settings. The app's update button opens its Store page.
 
-Setup adds the app to Start and offers a desktop shortcut, launch after installation and taskbar pinning. Windows may ask you to confirm pinning. Current test installers use a private signing certificate and need administrator approval once per PC to trust it.
+GitHub Releases will provide version notes and source. Direct EXE downloads are not offered yet. For local development/test packages, see [Development](DEVELOPMENT.md).
 
-Public release downloads and a Microsoft Store listing are not published yet. A source checkout contains no installers; see [Development](DEVELOPMENT.md) to build them. This edition can be installed alongside the original Store app; it does not import the original app's database.
+This edition can be installed alongside the original Store app and the local test edition. On first launch, choose your existing compatible JSON file again; device settings are separate. The original app's database is not imported.
 
 ## Getting started
 
@@ -101,6 +101,6 @@ Report bugs and feature requests in [this repository's Issues](https://github.co
 
 ## Privacy and license
 
-There is no account, built-in cloud connection or telemetry service. The workspace is an unencrypted local JSON file; any cloud transfer is handled by the sync provider you choose. Device preferences and recovery data are stored separately in the local app profile.
+There is no account, built-in cloud connection or telemetry service. The workspace is an unencrypted local JSON file; any cloud transfer is handled by the sync provider you choose. Device preferences and recovery data are stored separately in the local app profile. See the [privacy policy](PRIVACY.md) for storage locations, reminders and external services.
 
 [MIT licensed](LICENSE). Original application and image assets: copyright 2019 hjohnson12. [Original Repository](https://github.com/hjo12/kanban-tasker-uwp). The original attribution is preserved; this edition is not affiliated with or endorsed by the original author. Dependencies retain their own terms; see [third-party notices](THIRD-PARTY-NOTICES.md).

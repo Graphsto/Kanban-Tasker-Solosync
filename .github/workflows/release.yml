@@ -1,0 +1,88 @@
+name: Prepare release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: pwsh
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-2025
+    timeout-minutes: 40
+    outputs:
+      product_version: ${{ steps.gate.outputs.product_version }}
+      store_version: ${{ steps.gate.outputs.store_version }}
+      store_id: ${{ steps.gate.outputs.store_id }}
+      already_prepared: ${{ steps.gate.outputs.already_prepared }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Read pinned release configuration
+        run: |
+          . ./scripts/distribution.ps1
+          $settings = Get-DistributionSettings -Channel Store
+          "PRODUCT_VERSION=$($settings.Version)" >> $env:GITHUB_ENV
+          "STORE_PACKAGE_VERSION=$($settings.KanbanPackageVersion)" >> $env:GITHUB_ENV
+          "STORE_ID=$($settings.KanbanStoreId)" >> $env:GITHUB_ENV
+      - name: Require successful checks and unused versions
+        id: gate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/release.cjs check
+      - name: Build and verify Store submission bundle
+        if: steps.gate.outputs.already_prepared != 'true'
+        run: ./scripts/package-store.ps1 -OutputDirectory build/store/submission
+      - name: Upload submission package and build evidence
+        if: steps.gate.outputs.already_prepared != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: store-submission-${{ steps.gate.outputs.product_version }}
+          path: build/store/submission/
+          if-no-files-found: error
+          retention-days: 30
+
+  draft:
+    needs: prepare
+    if: needs.prepare.outputs.already_prepared != 'true'
+    runs-on: windows-2025
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Retrieve verified evidence from this workflow run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: store-submission-${{ needs.prepare.outputs.product_version }}
+        run: gh run download $env:GITHUB_RUN_ID --repo $env:GITHUB_REPOSITORY --name $env:ARTIFACT_NAME --dir build/store/submission
+      - name: Create unpublished release draft
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PRODUCT_VERSION: ${{ needs.prepare.outputs.product_version }}
+          STORE_PACKAGE_VERSION: ${{ needs.prepare.outputs.store_version }}
+          STORE_ID: ${{ needs.prepare.outputs.store_id }}
+        run: node .github/scripts/release.cjs draft

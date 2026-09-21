@@ -32,6 +32,7 @@ public sealed partial class MainWindow : Window
         text = new(preferences.Language);
         Microsoft.Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride = text.Culture.Name;
         InitializeComponent();
+        AppNameText.Text = Distribution.AppDistribution.DisplayName;
 #if KANBAN_UI_SMOKE_TEST
         SmokeProfile.Trace("Window XAML initialized");
 #endif
@@ -174,7 +175,7 @@ public sealed partial class MainWindow : Window
             if (ErrorBar.Message == storageError) ErrorBar.IsOpen = false;
             storageError = null;
         }
-        Title = board is null ? "Kanban Tasker" : $"{board.Get<string>(Fields.Name)} — Kanban Tasker";
+        Title = board is null ? Distribution.AppDistribution.DisplayName : $"{board.Get<string>(Fields.Name)} — {Distribution.AppDistribution.DisplayName}";
         RenderBoard();
         if (TaskPane.IsPaneOpen) RefreshDraftContext();
         rendering = false;

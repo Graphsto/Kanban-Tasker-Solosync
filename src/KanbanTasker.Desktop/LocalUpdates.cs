@@ -11,15 +11,9 @@ namespace KanbanTasker.Desktop;
 
 public sealed partial class MainWindow
 {
-    private static Version CurrentVersion
-    {
-        get
-        {
-            try { var v = Package.Current.Id.Version; return new(v.Major, v.Minor, v.Build, v.Revision); }
-            catch (Exception ex) when (ex is InvalidOperationException or COMException) { return Assembly.GetExecutingAssembly().GetName().Version!; }
-        }
-    }
-    private static bool CanSelectUpdate => Assembly.GetExecutingAssembly().GetManifestResourceInfo("KanbanTasker.PublisherCertificate") is not null;
+    private static Version CurrentVersion => Distribution.AppDistribution.ProductVersion;
+    private static bool CanSelectUpdate => !Distribution.AppDistribution.IsStore &&
+        Assembly.GetExecutingAssembly().GetManifestResourceInfo("KanbanTasker.PublisherCertificate") is not null;
     private static string UpdateCache
     {
         get

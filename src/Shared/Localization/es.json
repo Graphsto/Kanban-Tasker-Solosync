@@ -1,4 +1,9 @@
 {
+  "Update in Microsoft Store": "Actualizar en Microsoft Store",
+  "Microsoft Store manages updates according to your Windows settings.": "Microsoft Store administra las actualizaciones según la configuración de Windows.",
+  "Privacy policy": "Política de privacidad",
+  "Microsoft Store could not be opened. You can visit the app's page in your browser.": "No se pudo abrir Microsoft Store. Puedes visitar la página de la aplicación en el navegador.",
+  "Open Store website": "Abrir sitio web de la Store",
   "The change timestamp is exhausted. The data file was not modified.": "La marca de tiempo de cambios está agotada. No se modificó el archivo de datos.",
   "The update manifest is invalid or too large.": "El manifiesto de actualización no es válido o es demasiado grande.",
   "The package signature is too large.": "La firma del paquete es demasiado grande.",

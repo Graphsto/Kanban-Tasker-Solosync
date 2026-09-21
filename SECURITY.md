@@ -7,10 +7,9 @@ the original author's repository for changes made in this edition.
 
 Treat issues as public reports. Never attach personal board files, credentials, signing keys or
 details that would let others exploit an unpatched vulnerability. For a sensitive
-finding, use GitHub's private **Security → Report a vulnerability** when available.
-If it is not enabled, open an issue asking the maintainer for a private reporting
-channel without publishing exploit details. Private vulnerability reporting has not
-been verified as enabled; no private channel is currently promised.
+finding, use [GitHub's private vulnerability reporting](https://github.com/Graphsto/Kanban-Tasker-Solosync/security/advisories/new).
+Private reporting is enabled for this repository. Normal bugs and feature requests
+belong in Issues; do not publish exploit details there before a fix is available.
 
 Fixes target the current release; separate maintenance of older test builds is not
 promised. There is no paid support SLA or response-time guarantee.

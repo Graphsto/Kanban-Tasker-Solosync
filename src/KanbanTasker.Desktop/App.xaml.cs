@@ -37,7 +37,7 @@ public partial class App : Application
         await Task.CompletedTask;
 #else
         instance = AppInstance.FindOrRegisterForKey(
-            "KanbanTasker.Revived");
+            KanbanTasker.Distribution.AppDistribution.Identity);
         if (!instance.IsCurrent)
         {
             await instance.RedirectActivationToAsync(AppInstance.GetCurrent().GetActivatedEventArgs());

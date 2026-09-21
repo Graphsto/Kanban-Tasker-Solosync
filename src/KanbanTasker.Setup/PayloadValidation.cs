@@ -10,8 +10,8 @@ internal sealed record PayloadMetadata(string Version, string Architecture, stri
 
 internal static class PayloadValidation
 {
-    public const string Identity = "KanbanTasker.Revived";
-    public const string Publisher = "CN=KanbanTasker.Local";
+    public static string Identity => Distribution.AppDistribution.Identity;
+    public static string Publisher => Distribution.AppDistribution.Publisher;
 
     public static X509Certificate2 Certificate(byte[] bytes, PayloadMetadata metadata)
     {

@@ -19,6 +19,7 @@
     <DebugType>embedded</DebugType>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\Shared\AppDistribution.cs" Link="Distribution\AppDistribution.cs" />
     <EmbeddedResource Include="..\KanbanTasker.Desktop\Assets\Logo.png" LogicalName="Setup.Logo" />
     <Compile Include="..\Shared\UpdateFiles.cs" Link="Updates\UpdateFiles.cs" />
     <Compile Include="..\Shared\WindowsSignature.cs" Link="Updates\WindowsSignature.cs" />

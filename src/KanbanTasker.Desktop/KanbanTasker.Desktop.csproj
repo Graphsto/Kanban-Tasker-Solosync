@@ -23,7 +23,7 @@
   <PropertyGroup Condition="'$(KanbanMsixBuild)' == 'true'">
     <!-- Installed XAML looks up resources by the MSIX identity, not the exe name. -->
     <ProjectPriFileName>resources.pri</ProjectPriFileName>
-    <ProjectPriIndexName>KanbanTasker.Revived</ProjectPriIndexName>
+    <ProjectPriIndexName>$(KanbanIdentity)</ProjectPriIndexName>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
@@ -33,7 +33,8 @@
     <EmbeddedResource Include="$(KanbanSigningCertificatePath)" LogicalName="KanbanTasker.PublisherCertificate" Condition="'$(KanbanSigningCertificatePath)' != ''" />
     <Compile Include="..\Shared\UpdateFiles.cs" Link="Updates\UpdateFiles.cs" />
     <Compile Include="..\Shared\WindowsSignature.cs" Link="Updates\WindowsSignature.cs" />
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.10" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.12" />
+    <Compile Include="..\Shared\AppDistribution.cs" Link="Distribution\AppDistribution.cs" />
   </ItemGroup>
   <Import Project="..\Shared\Localization\Localization.projitems" />
   <!-- A separate developer test build, never enabled by packaging. It uses its own profile. -->
@@ -44,6 +45,7 @@
     <Compile Include="..\..\tests\DesktopSmokeTests.cs" Link="Tests\DesktopSmokeTests.cs" />
     <Compile Include="..\..\tests\DesktopShowcase.cs" Link="Tests\DesktopShowcase.cs" />
     <Compile Include="..\..\tests\DesktopGroupTests.cs" Link="Tests\DesktopGroupTests.cs" />
+    <Compile Include="..\..\tests\DesktopDistributionTests.cs" Link="Tests\DesktopDistributionTests.cs" />
   </ItemGroup>
   <Target Name="RejectPackagedSmokeTest" BeforeTargets="PrepareForBuild" Condition="'$(KanbanUiSmokeTest)' == 'true' And '$(KanbanMsixBuild)' == 'true'">
     <Error Text="The isolated desktop smoke test must never be included in an installable package." />
