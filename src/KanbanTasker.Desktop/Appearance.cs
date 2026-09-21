@@ -64,7 +64,9 @@ public sealed partial class MainWindow
             appearanceBrushes["TextFillColorSecondaryBrush"] = ColorBrush(colors.SecondaryText);
         }
         Root.Background = Brush("ApplicationPageBackgroundThemeBrush");
-        TaskPane.PaneBackground = Brush("LayerFillColorDefaultBrush");
+        var editorColor = AppearanceColors.EditorFor(preferences.Theme, Root.ActualTheme == ElementTheme.Dark,
+            themeSettings?.HighContrast == true);
+        TaskPane.PaneBackground = editorColor is not null ? ColorBrush(editorColor) : Brush("LayerFillColorDefaultBrush");
         if (EditorLoaded) EditorSurface.Background = TaskPane.PaneBackground;
         PathText.Foreground = Brush("TextFillColorSecondaryBrush");
         if (settingsDialog is not null) ApplyDialogAppearance(settingsDialog);
