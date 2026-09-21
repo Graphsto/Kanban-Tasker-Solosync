@@ -13,4 +13,12 @@ internal sealed record AppearanceColors(string Page, string Surface, string Card
         "darkBlue" => new("#122333", "#193348", "#23445C", "#42657F", "#BED0E0"),
         _ => null
     };
+
+    internal static string? EditorFor(string? theme, bool isDark, bool highContrast) => highContrast ? null : Normalize(theme) switch
+    {
+        "lightBlue" => "#F2F8FC",
+        "darkBlue" => "#223E53",
+        _ when !isDark => "#E8EBEF",
+        _ => null
+    };
 }

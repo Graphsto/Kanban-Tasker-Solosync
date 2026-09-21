@@ -50,7 +50,7 @@ public sealed partial class MainWindow
         CancelTaskButton.Click += CancelTask_Click;
         DeleteTaskButton.Click += DeleteTask_Click;
         ApplyEditorLanguage();
-        EditorSurface.Background = Brush("LayerFillColorDefaultBrush");
+        EditorSurface.Background = TaskPane.PaneBackground;
     }
     private TaskData? initialDraft;
     private bool HasDraftChanges => TaskPane.IsPaneOpen && initialDraft is not null
