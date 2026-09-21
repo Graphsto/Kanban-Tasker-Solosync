@@ -1,6 +1,10 @@
 param([string]$OutputDirectory, [ValidateSet('Local','Store')][string]$Channel = 'Local', [string]$PayloadDirectory)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
+$sdkLicense = Join-Path $repo 'packaging/licenses/Windows-SDK-license.rtf'
+if ((Get-FileHash -LiteralPath $sdkLicense -Algorithm SHA256).Hash -ne 'DD07EB178E00C6BBA4148457FC00FF77CD4887EB521D504186FE59C9EC8BBE62') {
+    throw 'The preserved Windows SDK license differs from the documented upstream file.'
+}
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repo 'build/legal' }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $packages = @{}
@@ -37,7 +41,7 @@ foreach ($project in $projects) {
         foreach ($notice in $notices) { Copy-Item -LiteralPath $notice.FullName -Destination $target }
         $noticePaths = @($notices | ForEach-Object { "$relative/$($_.Name)" })
         if ($candidate.Id -in @('Microsoft.Windows.SDK.NET.Ref','Microsoft.Windows.SDK.BuildTools')) {
-            Copy-Item -LiteralPath (Join-Path $repo 'packaging/licenses/Windows-SDK-license.rtf') -Destination $target
+            Copy-Item -LiteralPath $sdkLicense -Destination $target
             $noticePaths += "$relative/Windows-SDK-license.rtf"
         }
         $packages[$key] = [ordered]@{
