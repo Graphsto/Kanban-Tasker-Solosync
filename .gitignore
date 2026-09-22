@@ -1,11 +1,13 @@
 # Generated binaries, restore data, packages and test results
 /build/
+/linux
 
 # Local editor settings and project context
 /.vscode/
 /.vs/
 /docs/
 /branding/context/
+/store-listing/
 /AGENTS.md
 
 # Private signing keys
