@@ -38,7 +38,9 @@ public sealed partial class MainWindow
         var linking=AuthorizeAndPickAsync(); await SettleAsync();
         check(GitHubTestDialog().Title?.ToString()==T("Sign in with GitHub"),"Device authorization displays the sign-in dialog");
         authorization.SetResult(true);
-        await WaitForAsync(() => VisualTreeHelper.GetOpenPopupsForXamlRoot(Root.XamlRoot).Any(p => FindVisual<ContentDialog>(p.Child)?.Title?.ToString()==T("Link GitHub project")));
+        await WaitForAsync(() => VisualTreeHelper.GetOpenPopupsForXamlRoot(Root.XamlRoot).Any(p =>
+            FindVisual<ContentDialog>(p.Child) is { } dialog && dialog.Title?.ToString()==T("Link GitHub project")
+            && FindVisual<ComboBox>(dialog,"GitHubOrganization") is { IsLoaded:true }));
         var picker=GitHubTestDialog();
         check(picker.Title?.ToString()==T("Link GitHub project"),"Browser authorization automatically opens the project picker without a second WinRT completion handler");
         FindVisual<ComboBox>(picker,"GitHubOrganization")!.SelectedIndex=0;
