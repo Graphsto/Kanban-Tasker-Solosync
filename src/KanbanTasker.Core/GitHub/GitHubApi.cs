@@ -92,6 +92,7 @@ public sealed class GitHubApi(HttpClient http, Func<CancellationToken, Task<stri
         var options = status.GetProperty("options").EnumerateArray().Select(o => new GitHubOption(S(o, "id"), S(o, "name"), S(o, "color"), S(o, "description"))).ToArray();
         await ConnectionAsync(id, "views", """
             id number name layout filter groupByFields(first:100) { nodes { ... on ProjectV2FieldCommon { id } } pageInfo { hasNextPage } }
+            verticalGroupByFields(first:100) { nodes { ... on ProjectV2FieldCommon { id } } pageInfo { hasNextPage } }
             sortByFields(first:100) { nodes { direction field { ... on ProjectV2FieldCommon { id name dataType } } } pageInfo { hasNextPage } }
             """, views, ct);
         var sortFields=views.SelectMany(v => v.GetProperty("sortByFields").GetProperty("nodes").EnumerateArray())
@@ -142,12 +143,14 @@ public sealed class GitHubApi(HttpClient http, Func<CancellationToken, Task<stri
         var boardViews = new List<GitHubView>();
         foreach (var view in views)
         {
-            RequireComplete(view.GetProperty("groupByFields")); RequireComplete(view.GetProperty("sortByFields"));
-            var groups = view.GetProperty("groupByFields").GetProperty("nodes").EnumerateArray().ToArray();
+            RequireComplete(view.GetProperty("groupByFields")); RequireComplete(view.GetProperty("verticalGroupByFields")); RequireComplete(view.GetProperty("sortByFields"));
+            // GitHub board columns are vertical groups; groupByFields configures swimlanes.
+            var columns = view.GetProperty("verticalGroupByFields").GetProperty("nodes").EnumerateArray().ToArray();
+            var hasRowGrouping = view.GetProperty("groupByFields").GetProperty("nodes").GetArrayLength() > 0;
             var sorts = view.GetProperty("sortByFields").GetProperty("nodes").EnumerateArray().ToArray();
             var number = view.GetProperty("number").GetInt32();
             var ids = Array.Empty<string>();
-            if (S(view, "layout") == "BOARD_LAYOUT" && groups.Length == 1 && S(groups[0], "id") == statusId)
+            if (S(view, "layout") == "BOARD_LAYOUT" && columns.Length == 1 && S(columns[0], "id") == statusId && !hasRowGrouping)
             {
                 var visible = await PagesAsync($"https://api.github.com/orgs/{Uri.EscapeDataString(organization)}/projectsV2/{project.GetProperty("number").GetInt32()}/views/{number}/items?per_page=100", null, ct);
                 ids = visible.Select(v => S(v, "node_id")).Where(x => cards.Any(c => c.Id == x)).ToArray();
@@ -167,8 +170,8 @@ public sealed class GitHubApi(HttpClient http, Func<CancellationToken, Task<stri
                     ids = (S(sort, "direction") == "DESC" ? ids.OrderByDescending(Value, comparer) : ids.OrderBy(Value, comparer)).ToArray();
                 }
             }
-            boardViews.Add(new(S(view, "id"), number, S(view, "name"), S(view, "layout"), groups.Length == 1 ? S(groups[0], "id") : null,
-                sorts.Length > 0, S(view, "filter"), ids));
+            boardViews.Add(new(S(view, "id"), number, S(view, "name"), S(view, "layout"), columns.Length == 1 ? S(columns[0], "id") : null,
+                sorts.Length > 0, S(view, "filter"), ids, hasRowGrouping));
         }
         MinimumRefreshInterval=TimeSpan.FromSeconds(Math.Max(5,Math.Max(secondsPerRestRequest*Math.Max(1,restRequests-restBefore),
             secondsPerGraphPoint*Math.Max(1,graphPoints-graphBefore))*1.25));

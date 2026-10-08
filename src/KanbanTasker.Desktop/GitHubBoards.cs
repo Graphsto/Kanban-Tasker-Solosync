@@ -305,6 +305,17 @@ public sealed partial class MainWindow
         var picker = Dialog(T("Link GitHub project"),panel,T("Link"));
         GitHubProjectSnapshot? snapshot = null;
         var generation=0; var busy=false;
+        void UpdateLinkAvailability() => picker.IsPrimaryButtonEnabled=!busy && snapshot is not null &&
+            (group.IsChecked == true ? snapshot.Views.Any(v => v.IsSupported(snapshot.StatusFieldId))
+                : views.SelectedItems.OfType<GitHubViewChoice>().Any(v => v.Supported));
+        views.ContainerContentChanging += (_,args) => args.ItemContainer.IsEnabled=args.Item is GitHubViewChoice { Supported:true };
+        views.SelectionChanged += (_,args) =>
+        {
+            foreach (var choice in args.AddedItems.OfType<GitHubViewChoice>().Where(v => !v.Supported).ToArray()) views.SelectedItems.Remove(choice);
+            UpdateLinkAvailability();
+        };
+        group.Checked += (_,_) => UpdateLinkAvailability();
+        group.Unchecked += (_,_) => UpdateLinkAvailability();
         picker.Closing += (_,args) => args.Cancel=busy;
         organization.SelectionChanged += async (_,_) =>
         {
@@ -317,7 +328,7 @@ public sealed partial class MainWindow
                 if (current == generation) projects.ItemsSource=list.Select(p => new GitHubProjectChoice(p.Id,p.Title,p)).ToArray();
             }
             catch (IOException ex) { message.Text=text.TranslateDiagnostic(ex.Message); }
-            finally { busy=false; projects.IsEnabled=true; }
+            finally { busy=false; projects.IsEnabled=true; UpdateLinkAvailability(); }
         };
         projects.SelectionChanged += async (_,_) =>
         {
@@ -334,10 +345,9 @@ public sealed partial class MainWindow
                 foreach (var choice in choices.Where(v => v.Supported)) views.SelectedItems.Add(choice);
                 var count=choices.Count(v => v.Supported);
                 message.Text=count > 1 && !preferences.GroupsEnabled ? T("Multiple boards found. Enable groups to keep this project together.") : T("Only Status Kanban views can be linked.");
-                picker.IsPrimaryButtonEnabled=count > 0;
             }
             catch (IOException ex) { message.Text=text.TranslateDiagnostic(ex.Message); }
-            finally { busy=false; }
+            finally { busy=false; UpdateLinkAvailability(); }
         };
         picker.IsPrimaryButtonEnabled=false;
         picker.PrimaryButtonClick += async (_,args) =>
@@ -345,7 +355,7 @@ public sealed partial class MainWindow
             if (snapshot is null) { args.Cancel=true; return; }
             var numbers=group.IsChecked == true ? snapshot.Views.Where(v => v.IsSupported(snapshot.StatusFieldId)).Select(v => v.Number).ToArray()
                 : views.SelectedItems.Cast<GitHubViewChoice>().Where(v => v.Supported).Select(v => v.Number).ToArray();
-            if (numbers.Length == 0 || views.SelectedItems.Cast<GitHubViewChoice>().Any(v => !v.Supported))
+            if (numbers.Length == 0)
             { args.Cancel=true; message.Text=T("Select at least one supported Status board."); return; }
             var deferral=args.GetDeferral(); busy=true;
             try

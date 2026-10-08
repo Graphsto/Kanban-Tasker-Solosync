@@ -24,7 +24,9 @@ Builds without a Client ID explain the missing setup when you select
    new supported views on a later refresh.
 
 Only Kanban views whose column field is **Status** are supported. Tables,
-roadmaps and boards grouped by another field are listed as unsupported.
+roadmaps, boards with another column field, and boards with additional row
+grouping (swimlanes), such as the Priority board template, are listed as unsupported.
+Unsupported views are disabled in the picker.
 Saved view filters are applied by GitHub. A filtered-out card still belongs to
 the project. Cards without a status appear under **No status**. Saved automatic
 sorting disables manual reordering in that view.

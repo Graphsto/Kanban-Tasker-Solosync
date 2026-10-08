@@ -48,9 +48,11 @@ public sealed partial class MainWindow
         await SettleAsync();
         var detected=FindVisual<ListView>(picker,"GitHubViews")!;
         check(detected.Items.Count==3 && detected.SelectedItems.Count==2,"Project picker detects supported Status views and lists other views as unsupported");
-        detected.SelectedItems.Add(detected.Items[2]); PressGitHubDialog(picker,"PrimaryButton"); await SettleAsync();
-        check(github.Registry.Links.Count==0 && GitHubTestDialog()==picker,"Unsupported views cannot be linked through the picker");
+        check(detected.ContainerFromIndex(2) is ListViewItem { IsEnabled:false },"Unsupported views are visibly disabled in the picker");
+        detected.SelectedItems.Clear(); detected.SelectedItems.Add(detected.Items[2]); await SettleAsync();
+        check(detected.SelectedItems.Count==0 && !picker.IsPrimaryButtonEnabled && github.Registry.Links.Count==0,"Unsupported selection is rejected and linking stays disabled");
         detected.SelectedItems.Clear(); detected.SelectedItems.Add(detected.Items[0]);
+        check(picker.IsPrimaryButtonEnabled,"Selecting a supported Status view enables linking");
         PressGitHubDialog(picker,"PrimaryButton"); await linking;
         check(github.Registry.Links.Count==1 && !preferences.GroupsEnabled,"Flat-mode linking imports only the selected view without enabling groups");
         await github.LinkAsync(api.Snapshot,[1,2],false);

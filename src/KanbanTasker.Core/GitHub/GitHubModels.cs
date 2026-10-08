@@ -16,9 +16,9 @@ public sealed record GitHubOrganization(string Login, string Name);
 public sealed record GitHubProjectSummary(string Id, int Number, string Title, string Organization);
 public sealed record GitHubOption(string Id, string Name, string Color, string Description);
 public sealed record GitHubView(string Id, int Number, string Name, string Layout, string? GroupFieldId,
-    bool Sorted, string Filter, string[] ItemIds)
+    bool Sorted, string Filter, string[] ItemIds, bool HasRowGrouping = false)
 {
-    public bool IsSupported(string statusId) => Layout == "BOARD_LAYOUT" && GroupFieldId == statusId;
+    public bool IsSupported(string statusId) => Layout == "BOARD_LAYOUT" && GroupFieldId == statusId && !HasRowGrouping;
 }
 public enum GitHubCardKind { Draft, Issue }
 public sealed record GitHubCard(string Id, string ContentId, GitHubCardKind Kind, string Title, string Body,

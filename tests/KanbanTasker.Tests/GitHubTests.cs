@@ -140,7 +140,11 @@ public sealed class GitHubTests : IDisposable
             var variables=JsonDocument.Parse(payload).RootElement.GetProperty("variables");
             if (payload.Contains("viewerCanUpdate")) return Graph("{\"node\":{\"id\":\"P1\",\"number\":1,\"title\":\"Project\",\"viewerCanUpdate\":true,\"owner\":{\"login\":\"example\"}}}");
             if (payload.Contains("fields(first")) return Connection("fields","[{\"id\":\"STATUS\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"todo\",\"name\":\"To do\",\"color\":\"GREEN\",\"description\":\"\"}]}]");
-            if (payload.Contains("views(first")) return Connection("views","[{\"id\":\"V1\",\"number\":1,\"name\":\"Backlog\",\"layout\":\"BOARD_LAYOUT\",\"filter\":\"is:draft\",\"groupByFields\":{\"nodes\":[{\"id\":\"STATUS\"}],\"pageInfo\":{\"hasNextPage\":false}},\"sortByFields\":{\"nodes\":[],\"pageInfo\":{\"hasNextPage\":false}}}]");
+            if (payload.Contains("views(first"))
+            {
+                Assert.Contains("verticalGroupByFields",payload);
+                return Connection("views","["+View("BOARD_LAYOUT","STATUS",null)+"]");
+            }
             var second=variables.GetProperty("cursor").ValueKind==JsonValueKind.String;
             return second ? Connection("items","["+Item("pr","PullRequest")+"]")
                 : Connection("items","["+Item("draft","DraftIssue")+","+Item("issue","Issue")+"]",true);
@@ -148,6 +152,46 @@ public sealed class GitHubTests : IDisposable
         var api=new GitHubApi(http,_ => Task.FromResult("fixture-token")); var snapshot=await api.ProjectAsync("P1");
         Assert.Equal(2,snapshot.Cards.Length); Assert.Single(snapshot.Views[0].ItemIds); Assert.Equal("draft",snapshot.Views[0].ItemIds[0]);
         Assert.Equal(2,calls.Count(c => c.Contains("items(first"))); Assert.Contains(calls,c => c.Contains("/views/1/items"));
+    }
+    [Theory]
+    [InlineData("BOARD_LAYOUT","STATUS",null,true)]
+    [InlineData("BOARD_LAYOUT","STATUS","PRIORITY",false)]
+    [InlineData("BOARD_LAYOUT","PRIORITY",null,false)]
+    [InlineData("BOARD_LAYOUT",null,"STATUS",false)]
+    [InlineData("TABLE_LAYOUT","STATUS",null,false)]
+    [InlineData("ROADMAP_LAYOUT",null,null,false)]
+    public async Task ViewSupportUsesStatusColumnsAndRejectsRowGrouping(string layout,string? column,string? row,bool supported)
+    {
+        var membershipReads=0;
+        using var http=new HttpClient(new Handler(async request =>
+        {
+            if (request.Method==HttpMethod.Get) { membershipReads++; return Reply("[]"); }
+            var query=await request.Content!.ReadAsStringAsync();
+            if (query.Contains("viewerCanUpdate")) return Graph("{\"node\":{\"id\":\"P1\",\"number\":1,\"title\":\"Project\",\"viewerCanUpdate\":true,\"owner\":{\"login\":\"example\"}}}");
+            if (query.Contains("fields(first")) return Connection("fields","[{\"id\":\"STATUS\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[]}]");
+            if (query.Contains("views(first")) return Connection("views","["+View(layout,column,row)+"]");
+            return Connection("items","[]");
+        }));
+        var snapshot=await new GitHubApi(http,_ => Task.FromResult("fixture-token")).ProjectAsync("P1");
+        var view=Assert.Single(snapshot.Views);
+        Assert.Equal(column,view.GroupFieldId); Assert.Equal(row is not null,view.HasRowGrouping);
+        Assert.Equal(supported,view.IsSupported(snapshot.StatusFieldId)); Assert.Equal(supported ? 1 : 0,membershipReads);
+        // Cache serialization must retain the row-grouping restriction across restarts.
+        Assert.Equal(supported,JsonSerializer.Deserialize<GitHubView>(JsonSerializer.Serialize(view))!.IsSupported(snapshot.StatusFieldId));
+    }
+    [Fact] public async Task IncompleteColumnConfigurationRejectsSnapshotBeforeMembershipReads()
+    {
+        using var http=new HttpClient(new Handler(async request =>
+        {
+            Assert.Equal(HttpMethod.Post,request.Method);
+            var query=await request.Content!.ReadAsStringAsync();
+            if (query.Contains("viewerCanUpdate")) return Graph("{\"node\":{\"id\":\"P1\",\"number\":1,\"title\":\"Project\",\"viewerCanUpdate\":true,\"owner\":{\"login\":\"example\"}}}");
+            if (query.Contains("fields(first")) return Connection("fields","[{\"id\":\"STATUS\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[]}]");
+            if (query.Contains("views(first")) return Connection("views","["+View("BOARD_LAYOUT","STATUS",null,true)+"]");
+            return Connection("items","[]");
+        }));
+        var error=await Assert.ThrowsAsync<GitHubApiException>(() => new GitHubApi(http,_ => Task.FromResult("fixture-token")).ProjectAsync("P1"));
+        Assert.Equal("This project has too many card fields or view rules to load safely.",error.Message);
     }
     [Theory]
     [InlineData("selectionMismatch")]
@@ -307,6 +351,13 @@ public sealed class GitHubTests : IDisposable
     private static string Item(string id,string kind) => JsonSerializer.Serialize(new { id,isArchived=false,
         status=new { optionId="todo",field=new { id="STATUS" } },
         content=new { __typename=kind,id="content-"+id,title=id,body="body",url="https://github.com/example/repo/issues/1",createdAt="2026-10-08T10:00:00Z",updatedAt="2026-10-08T10:00:00Z" } });
+    private static string View(string layout,string? column,string? row,bool incompleteColumns=false) => JsonSerializer.Serialize(new
+    {
+        id="V1",number=1,name="Backlog",layout,filter="is:draft",
+        groupByFields=new { nodes=row is null ? [] : new[] { new { id=row } },pageInfo=new { hasNextPage=false } },
+        verticalGroupByFields=new { nodes=column is null ? [] : new[] { new { id=column } },pageInfo=new { hasNextPage=incompleteColumns } },
+        sortByFields=new { nodes=Array.Empty<object>(),pageInfo=new { hasNextPage=false } }
+    });
     private static HttpResponseMessage Connection(string name,string nodes,bool more=false) => Graph("{\"node\":{\""+name+"\":{\"nodes\":"+nodes+",\"pageInfo\":{\"hasNextPage\":"+(more ? "true" : "false")+",\"endCursor\":\"next\"}}}}");
     private static HttpResponseMessage Graph(string data) => Reply("{\"data\":"+data+"}");
     private static HttpResponseMessage Reply(string body,HttpStatusCode code=HttpStatusCode.OK) => new(code) { Content=new StringContent(body,Encoding.UTF8,"application/json") };
