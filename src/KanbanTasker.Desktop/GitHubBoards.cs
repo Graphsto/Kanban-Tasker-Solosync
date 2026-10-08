@@ -122,13 +122,16 @@ public sealed partial class MainWindow
         order ??= entry.Project.Cards.Select(c => c.Id).ToArray();
         var siblings = WorkspaceView.Tasks(document!,column).Where(c => c.Id != id).ToArray();
         var anchor = index <= 0 || siblings.Length == 0 ? null : GitHubCardFor(siblings[Math.Min(index,siblings.Length)-1].Id)?.Id;
-        await ResolveGitHubConflictsAsync(accepted => github.MoveAsync(entry.Project.Id,original,GitHubStatusFor(column),anchor,!entry.View.Sorted,accepted,githubLifetime.Token,order));
+        var status=GitHubStatusFor(column);
+        await ResolveGitHubConflictsAsync(accepted => github.MoveAsync(entry.Project.Id,original,status,anchor,!entry.View.Sorted,accepted,githubLifetime.Token,order));
     }
     private async Task<bool> RemoveCardAsync(Guid id,GitHubCard? baseline=null)
     {
         if (!IsGitHubBoard) { await localBoards.CommitAsync(e => e.DeleteTask(id)); return true; }
         if (!CurrentCapabilities(id).RemoveCards) throw new GitHubApiException("Issue contents are read-only in this app.");
-        return await ResolveGitHubConflictsAsync(accepted => github.RemoveAsync(SelectedGitHubProject!.Id,baseline ?? GitHubCardFor(id)!,githubLifetime.Token,accepted));
+        var projectId=SelectedGitHubProject!.Id;
+        var original=baseline ?? GitHubCardFor(id)!;
+        return await ResolveGitHubConflictsAsync(accepted => github.RemoveAsync(projectId,original,githubLifetime.Token,accepted));
     }
     private async Task<bool> ResolveGitHubConflictsAsync(Func<IReadOnlyDictionary<string,string>,Task> action,Action<string,string>? keepRemote=null)
     {
@@ -186,7 +189,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(card,task.Title+", GitHub");
         if (capabilities.MoveCards) EnableBoardDrag(card,task.Id,false);
         var menu=new MenuFlyout();
-        menu.Items.Add(MenuItem(T("Open card"),() => OpenEditorAsync(task.Id,task.ColumnId)));
+        menu.Items.Add(MenuItem(T("Open card"),() => OpenEditorAsync(task.Id,task.ColumnId,allowDuringAction:true)));
         var siblings=WorkspaceView.Tasks(document!,task.ColumnId).Select(c => c.Id).ToList(); var index=siblings.IndexOf(task.Id);
         menu.Items.Add(MenuItem(T("Move up"),() => MoveCardAsync(task.Id,task.ColumnId,index-1,remote,order),capabilities.ReorderCards && index>0));
         menu.Items.Add(MenuItem(T("Move down"),() => MoveCardAsync(task.Id,task.ColumnId,index+1,remote,order),capabilities.ReorderCards && index<siblings.Count-1));

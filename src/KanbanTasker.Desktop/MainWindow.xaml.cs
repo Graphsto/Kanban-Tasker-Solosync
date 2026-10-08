@@ -209,6 +209,7 @@ public sealed partial class MainWindow : Window
     private async void BoardPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (rendering || BoardPicker.SelectedItem is not Choice choice || choice.Id == boardId) return;
+        if (working && (githubEditor || IsGitHubBoard)) { Render(); return; }
         if (await CanDiscardDraftAsync())
         {
             CloseEditor(); boardId = choice.Id; preferences.SelectedBoard = boardId;
@@ -220,10 +221,11 @@ public sealed partial class MainWindow : Window
     {
         if (working) return;
         working = true;
+        if (githubEditor) ApplyGitHubEditorState();
         try { await action(); }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or System.Security.Cryptography.CryptographicException or System.Runtime.InteropServices.COMException)
         { ShowError(ex.Message); }
-        finally { working = false; }
+        finally { working = false; if (githubEditor) ApplyGitHubEditorState(); }
     }
     private void ShowError(string message)
     {

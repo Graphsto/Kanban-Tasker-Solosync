@@ -41,7 +41,7 @@ public sealed partial class MainWindow
         check(((Choice[])BoardPicker.ItemsSource).Where(c => c.IsGitHub).All(c => c.GitHubVisibility==Visibility.Visible),"GitHub choices carry an accessible icon");
         check(!CalendarButton.IsEnabled && !EditBoardMenuItem.IsEnabled,"GitHub boards disable local calendar and board settings");
         var draft=GitHubIdentity.Card("P1","draft"); var issue=GitHubIdentity.Card("P1","issue"); var todo=GitHubIdentity.Column("P1","todo");
-        await OpenEditorAsync(issue,todo);
+        await RunAsync(() => OpenEditorAsync(issue,todo,allowDuringAction:true));
         check(TaskTitle.IsReadOnly && TaskDescription.IsReadOnly && TaskColumn.IsEnabled,"Issue contents are read-only while its Status can be changed");
         check(DeleteTaskButton.Visibility==Visibility.Collapsed,"Issue removal is not available");
         check(TaskPriority.Visibility==Visibility.Collapsed && DateInformation.Visibility==Visibility.Collapsed,"GitHub editor hides local-only fields");
@@ -66,6 +66,11 @@ public sealed partial class MainWindow
         SaveTask_Click(this,new RoutedEventArgs()); await SettleAsync();
         var conflict=VisualTreeHelper.GetOpenPopupsForXamlRoot(Root.XamlRoot).Select(p => FindVisual<ContentDialog>(p.Child)).First(x => x is not null)!;
         check(conflict.Title?.ToString()==T("GitHub conflict"),"Conflicting GitHub edits require a visible choice");
+        check(TaskTitle.IsReadOnly && !TaskColumn.IsEnabled && !CancelTaskButton.IsEnabled,"An in-flight GitHub write freezes editor changes and cancellation");
+        var savingBoard=boardId;
+        BoardPicker.SelectedItem=((Choice[])BoardPicker.ItemsSource).First(c => c.Id != savingBoard);
+        await OpenEditorAsync(issue,todo);
+        check(boardId==savingBoard && githubOriginal?.Id=="draft" && TaskTitle.Text=="Mine","Navigation cannot replace the editor context during a GitHub write");
         await capture("github-conflict",conflict);
         var peer=Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.CreatePeerForElement(FindVisual<Button>(conflict,"SecondaryButton")!);
         ((Microsoft.UI.Xaml.Automation.Provider.IInvokeProvider)peer.GetPattern(Microsoft.UI.Xaml.Automation.Peers.PatternInterface.Invoke)).Invoke();

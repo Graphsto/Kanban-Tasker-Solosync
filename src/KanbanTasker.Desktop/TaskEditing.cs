@@ -56,8 +56,9 @@ public sealed partial class MainWindow
     private TaskData? initialDraft;
     private bool HasDraftChanges => TaskPane.IsPaneOpen && initialDraft is not null
         && (!TaskDataEqual(ReadTaskDraft(), initialDraft) || TagInput.Text.Length > 0);
-    private async Task OpenEditorAsync(Guid? id, Guid columnId)
+    private async Task OpenEditorAsync(Guid? id, Guid columnId, bool allowDuringAction=false)
     {
+        if (working && !allowDuringAction && (githubEditor || IsGitHubBoard)) return;
         if (document is null || boardId is null || !await CanDiscardDraftAsync()) return;
         if (IsGitHubBoard && id is null && !CurrentCapabilities().EditContent) return;
         EnsureEditorLoaded();
@@ -142,13 +143,15 @@ public sealed partial class MainWindow
         {
             if (!IsGitHubBoard || boardId != draftBoardId) throw new GitHubApiException("GitHub is unreachable. Cached boards are read-only.");
             if (!CurrentCapabilities(originalTask?.Id).MoveCards) throw new GitHubApiException("GitHub is unreachable. Cached boards are read-only.");
+            var projectId=SelectedGitHubProject!.Id;
+            var original=githubOriginal;
             var draft=ReadTaskDraft();
             var edit=new GitHubEdit(githubOriginal is null || draft.Title != initialDraft?.Title ? draft.Title : null,
                 githubOriginal is null || draft.Description != initialDraft?.Description ? draft.Description : null,
                 githubOriginal is null || GitHubStatusFor(draft.ColumnId) != githubOriginal.StatusId,GitHubStatusFor(draft.ColumnId));
             try
             {
-                if (!await ResolveGitHubConflictsAsync(accepted => github.SaveAsync(SelectedGitHubProject!.Id,githubOriginal,edit,accepted,githubLifetime.Token),
+                if (!await ResolveGitHubConflictsAsync(accepted => github.SaveAsync(projectId,original,edit,accepted,githubLifetime.Token),
                     (field,_) => edit=field switch { "Title" => edit with { Title=null }, "Description" => edit with { Body=null }, "Status" => edit with { ChangeStatus=false }, _ => edit }))
                 { RefreshDraftContext(); return; }
             }
@@ -161,6 +164,7 @@ public sealed partial class MainWindow
     });
     private async void CancelTask_Click(object sender, RoutedEventArgs e)
     {
+        if (working && githubEditor) return;
         if (await CanDiscardDraftAsync()) CloseEditor();
     }
     private async void DeleteTask_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
@@ -185,7 +189,8 @@ public sealed partial class MainWindow
     {
         if (!EditorLoaded) return;
         var remote=githubEditor;
-        var capabilities=remote && (!IsGitHubBoard || boardId != draftBoardId) ? new BoardCapabilities(false,false,false,false,false) : CurrentCapabilities(originalTask?.Id);
+        var capabilities=remote && (working || !IsGitHubBoard || boardId != draftBoardId) ? new BoardCapabilities(false,false,false,false,false) : CurrentCapabilities(originalTask?.Id);
+        CancelTaskButton.IsEnabled=!remote || !working;
         TaskTitle.IsReadOnly=TaskDescription.IsReadOnly=remote && !capabilities.EditContent;
         TaskColumn.IsEnabled=!remote || capabilities.MoveCards;
         SaveTaskButton.IsEnabled=!remote || capabilities.MoveCards;
