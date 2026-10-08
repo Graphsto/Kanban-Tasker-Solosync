@@ -18,8 +18,29 @@ public sealed partial class MainWindow
         github.Changed+=GitHubChanged;
         await github.AccountAsync();
         CloseEditor(); preferences.GroupsEnabled=false; preferences.SelectedGroup=null;
-        var linking=PickGitHubProjectAsync(api); await SettleAsync();
+        var code=new GitHubDeviceCode("synthetic-device-code","TEST-CODE","https://github.com/login/device",5,900);
+        var cancelledAuthorization=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken authorizationToken=default;
+        var cancelledSignIn=WaitForGitHubSignInAsync(code,ct => { authorizationToken=ct; return cancelledAuthorization.Task.WaitAsync(ct); });
+        await SettleAsync(); PressGitHubDialog(GitHubTestDialog(),"CloseButton");
+        check(!await cancelledSignIn && authorizationToken.IsCancellationRequested,"Cancelling the sign-in dialog stops polling without opening a picker");
+        var failedAuthorization=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var failedSignIn=WaitForGitHubSignInAsync(code,ct => failedAuthorization.Task.WaitAsync(ct));
+        await SettleAsync(); failedAuthorization.SetException(new GitHubApiException("Synthetic authorization failure"));
+        var expectedFailure=false;
+        try { await failedSignIn; } catch (GitHubApiException) { expectedFailure=true; }
+        check(expectedFailure && !VisualTreeHelper.GetOpenPopupsForXamlRoot(Root.XamlRoot).Any(p => FindVisual<ContentDialog>(p.Child) is not null),"Failed authorization closes the device dialog without masking its error");
+        var authorization=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        async Task AuthorizeAndPickAsync()
+        {
+            if (await WaitForGitHubSignInAsync(code,ct => authorization.Task.WaitAsync(ct))) await PickGitHubProjectAsync(api);
+        }
+        var linking=AuthorizeAndPickAsync(); await SettleAsync();
+        check(GitHubTestDialog().Title?.ToString()==T("Sign in with GitHub"),"Device authorization displays the sign-in dialog");
+        authorization.SetResult(true);
+        await WaitForAsync(() => VisualTreeHelper.GetOpenPopupsForXamlRoot(Root.XamlRoot).Any(p => FindVisual<ContentDialog>(p.Child)?.Title?.ToString()==T("Link GitHub project")));
         var picker=GitHubTestDialog();
+        check(picker.Title?.ToString()==T("Link GitHub project"),"Browser authorization automatically opens the project picker without a second WinRT completion handler");
         FindVisual<ComboBox>(picker,"GitHubOrganization")!.SelectedIndex=0;
         FindVisual<ComboBox>(picker,"GitHubProject")!.SelectedIndex=0;
         await SettleAsync();

@@ -7,8 +7,8 @@ JSON file. Changing that file does not change GitHub links.
 
 This feature is being tested on `codex/github-projects`. Builds use the registered
 [Kanban Tasker Solosync GitHub App](https://github.com/apps/kanban-tasker-solosync),
-whose public Client ID is configured for both distribution channels. Installation,
-device-flow settings and real two-client acceptance still need to be verified.
+whose public Client ID is configured for both distribution channels. Real
+two-client acceptance still needs to be completed before production integration.
 Builds without a Client ID explain the missing setup when you select
 **Link GitHub project**.
 

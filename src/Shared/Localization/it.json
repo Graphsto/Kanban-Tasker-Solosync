@@ -328,5 +328,6 @@
   "This project does not have a Status selection field.": "Questo progetto non ha un campo di selezione Stato.",
   "GitHub sign-in could not be completed. Check the public Client ID and enable Device Flow in the GitHub App.": "L’accesso GitHub non è riuscito. Verifica il Client-ID pubblico e attiva Device Flow nella GitHub App.",
   "After {0}": "Dopo {0}",
-  "Move to start": "Sposta all’inizio"
+  "Move to start": "Sposta all’inizio",
+  "GitHub rejected an unsupported API request. Update the app and try again.": "GitHub ha rifiutato una richiesta API non supportata. Aggiorna l’app e riprova."
 }

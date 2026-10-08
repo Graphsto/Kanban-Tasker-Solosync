@@ -269,21 +269,27 @@ public sealed partial class MainWindow
         catch (GitHubApiException)
         {
             var code = await githubAuthentication.BeginAsync(githubLifetime.Token);
-            if (code.VerificationUri != "https://github.com/login/device") throw new GitHubApiException("GitHub returned an unsafe sign-in address.");
-            var content = new StackPanel { Spacing=14 };
-            content.Children.Add(new TextBlock { Text=T("Enter this code on GitHub: {0}",code.UserCode),IsTextSelectionEnabled=true });
-            content.Children.Add(new HyperlinkButton { Content=T("Open GitHub sign-in"),NavigateUri=new Uri(code.VerificationUri) });
-            content.Children.Add(new TextBlock { Text=T("Waiting for browser authorization…"),TextWrapping=TextWrapping.Wrap });
-            var dialog = Dialog(T("Sign in with GitHub"),content);
-            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(githubLifetime.Token);
-            var signIn = githubAuthentication.SignInAsync(code,cancellation.Token);
-            var showing = dialog.ShowAsync();
-            var completed = await Task.WhenAny(signIn,showing.AsTask());
-            if (completed != signIn) { cancellation.Cancel(); try { await signIn; } catch (OperationCanceledException) { } return; }
-            try { await signIn; } finally { dialog.Hide(); }
-            await showing; await github.AccountAsync(githubLifetime.Token);
+            if (!await WaitForGitHubSignInAsync(code,ct => githubAuthentication.SignInAsync(code,ct))) return;
+            await github.AccountAsync(githubLifetime.Token);
         }
         await PickGitHubProjectAsync(new GitHubApi(githubHttp,githubAuthentication.AccessTokenAsync));
+    }
+    private async Task<bool> WaitForGitHubSignInAsync(GitHubDeviceCode code,Func<CancellationToken,Task> authorize)
+    {
+        if (code.VerificationUri != "https://github.com/login/device") throw new GitHubApiException("GitHub returned an unsafe sign-in address.");
+        var content = new StackPanel { Spacing=14 };
+        content.Children.Add(new TextBlock { Text=T("Enter this code on GitHub: {0}",code.UserCode),IsTextSelectionEnabled=true });
+        content.Children.Add(new HyperlinkButton { Content=T("Open GitHub sign-in"),NavigateUri=new Uri(code.VerificationUri) });
+        content.Children.Add(new TextBlock { Text=T("Waiting for browser authorization…"),TextWrapping=TextWrapping.Wrap });
+        var dialog = Dialog(T("Sign in with GitHub"),content);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(githubLifetime.Token);
+        var signIn = authorize(cancellation.Token);
+        // WinRT permits one Completed handler; share one Task for both awaits.
+        var showing = dialog.ShowAsync().AsTask();
+        var completed = await Task.WhenAny(signIn,showing);
+        if (completed != signIn) { cancellation.Cancel(); try { await signIn; } catch (OperationCanceledException) { } return false; }
+        try { await signIn; return true; }
+        finally { dialog.Hide(); await showing; }
     }
     private async Task PickGitHubProjectAsync(IGitHubApi api)
     {

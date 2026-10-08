@@ -133,6 +133,10 @@ public sealed class GitHubTests : IDisposable
         {
             var payload=request.Content is null ? "" : await request.Content.ReadAsStringAsync(); calls.Add(payload+request.RequestUri);
             if (request.Method==HttpMethod.Get) return Reply("[{\"node_id\":\"draft\"}]");
+            // GitHub's ProjectV2FieldConfiguration is a union: direct field { id } is invalid,
+            // even when a project has no items. Simulate its schema validation before resolving data.
+            if (System.Text.RegularExpressions.Regex.IsMatch(payload,@"\bfield\s*\{\s*id\b"))
+                return Reply("{\"errors\":[{\"message\":\"Selections cannot be made directly on unions\",\"extensions\":{\"code\":\"selectionMismatch\"}}]}");
             var variables=JsonDocument.Parse(payload).RootElement.GetProperty("variables");
             if (payload.Contains("viewerCanUpdate")) return Graph("{\"node\":{\"id\":\"P1\",\"number\":1,\"title\":\"Project\",\"viewerCanUpdate\":true,\"owner\":{\"login\":\"example\"}}}");
             if (payload.Contains("fields(first")) return Connection("fields","[{\"id\":\"STATUS\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"todo\",\"name\":\"To do\",\"color\":\"GREEN\",\"description\":\"\"}]}]");
@@ -144,6 +148,20 @@ public sealed class GitHubTests : IDisposable
         var api=new GitHubApi(http,_ => Task.FromResult("fixture-token")); var snapshot=await api.ProjectAsync("P1");
         Assert.Equal(2,snapshot.Cards.Length); Assert.Single(snapshot.Views[0].ItemIds); Assert.Equal("draft",snapshot.Views[0].ItemIds[0]);
         Assert.Equal(2,calls.Count(c => c.Contains("items(first"))); Assert.Contains(calls,c => c.Contains("/views/1/items"));
+    }
+    [Theory]
+    [InlineData("selectionMismatch")]
+    [InlineData("undefinedField")]
+    public async Task ApiSchemaFailuresNeverSuggestChangingProjectPermissions(string code)
+    {
+        using var http=new HttpClient(new Handler(_ => Task.FromResult(Reply(JsonSerializer.Serialize(new
+        {
+            errors=new[] { new { message="Synthetic schema error",extensions=new { code } } }
+        })))));
+        var api=new GitHubApi(http,_ => Task.FromResult("fixture-token"));
+        var error=await Assert.ThrowsAsync<GitHubApiException>(() => api.ViewerAsync());
+        Assert.Equal("GitHub rejected an unsupported API request. Update the app and try again.",error.Message);
+        Assert.False(error.Uncertain);
     }
     [Fact] public async Task FailedLaterPageRejectsEntireSnapshot()
     {

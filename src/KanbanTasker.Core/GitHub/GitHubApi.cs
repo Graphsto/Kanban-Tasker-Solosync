@@ -97,7 +97,7 @@ public sealed class GitHubApi(HttpClient http, Func<CancellationToken, Task<stri
         var sortFields=views.SelectMany(v => v.GetProperty("sortByFields").GetProperty("nodes").EnumerateArray())
             .Select(s => s.GetProperty("field")).Where(f => S(f,"name") != "Title").DistinctBy(f => S(f,"id")).ToArray();
         const string valueSelection="""
-              ... on ProjectV2ItemFieldSingleSelectValue { optionId name field { id } }
+              ... on ProjectV2ItemFieldSingleSelectValue { optionId name field { ... on ProjectV2FieldCommon { id } } }
               ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2FieldCommon { id } } }
               ... on ProjectV2ItemFieldNumberValue { number field { ... on ProjectV2FieldCommon { id } } }
               ... on ProjectV2ItemFieldDateValue { date field { ... on ProjectV2FieldCommon { id } } }
@@ -267,7 +267,14 @@ public sealed class GitHubApi(HttpClient http, Func<CancellationToken, Task<stri
                 if (!(RetryAt > DateTimeOffset.UtcNow)) RetryAt = DateTimeOffset.UtcNow.AddMinutes(1);
                 throw new GitHubApiException("GitHub rate limit reached. Editing is paused until requests are allowed again.",retryAt:RetryAt);
             }
-            throw new GitHubApiException("GitHub rejected the request. Check project permissions and refresh the board.", mutation && json.TryGetProperty("data", out var partial) && partial.ValueKind != JsonValueKind.Null);
+            var uncertain=mutation && json.TryGetProperty("data",out var partial) && partial.ValueKind != JsonValueKind.Null;
+            if (errors.ValueKind == JsonValueKind.Array && errors.EnumerateArray().Any(e => e.ValueKind == JsonValueKind.Object && e.TryGetProperty("extensions",out var extension)
+                && S(extension,"code") is "selectionMismatch" or "undefinedField" or "argumentNotAccepted" or "variableMismatch" or "missingRequiredArguments" or "GRAPHQL_VALIDATION_FAILED"))
+                throw new GitHubApiException("GitHub rejected an unsupported API request. Update the app and try again.",uncertain);
+            var denied=errors.ValueKind == JsonValueKind.Array && errors.EnumerateArray().Any(e => S(e,"type") is "FORBIDDEN" or "INSUFFICIENT_SCOPES");
+            throw new GitHubApiException(denied
+                ? "GitHub access denied. Check the App installation, organization approval, and project permissions."
+                : "GitHub could not complete the request. Refresh the board before trying again.",uncertain);
         }
         if (!json.TryGetProperty("data",out var data) || data.ValueKind != JsonValueKind.Object)
             throw new GitHubApiException("GitHub returned an incomplete response.",mutation);
