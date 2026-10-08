@@ -4,6 +4,8 @@
     <KanbanDisplayName>Kanban Tasker SoloSync</KanbanDisplayName>
     <KanbanStoreId>9P7HG1RBVBW6</KanbanStoreId>
     <KanbanPrivacyUrl>https://github.com/Graphsto/Kanban-Tasker-Solosync/blob/main/PRIVACY.md</KanbanPrivacyUrl>
+    <!-- Public GitHub App client ID; supplied for configured builds. Never embed a client secret. -->
+    <KanbanGitHubClientId Condition="'$(KanbanGitHubClientId)' == ''"></KanbanGitHubClientId>
   </PropertyGroup>
   <PropertyGroup Condition="'$(KanbanChannel)' == 'Local'">
     <KanbanIdentity>KanbanTasker.Revived</KanbanIdentity>
@@ -31,6 +33,7 @@
     <AssemblyMetadata Include="ProfileDirectory" Value="$(KanbanProfileDirectory)" />
     <AssemblyMetadata Include="StoreId" Value="$(KanbanStoreId)" />
     <AssemblyMetadata Include="PrivacyUrl" Value="$(KanbanPrivacyUrl)" />
+    <AssemblyMetadata Include="GitHubClientId" Value="$(KanbanGitHubClientId)" />
   </ItemGroup>
   <Target Name="ValidateDistributionProfile" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(KanbanChannel)' != 'Local' And '$(KanbanChannel)' != 'Store'" Text="KanbanChannel must be Local or Store." />

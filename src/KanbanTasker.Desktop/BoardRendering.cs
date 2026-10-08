@@ -17,6 +17,7 @@ public sealed partial class MainWindow
         if (document is null || boardId is null) return;
         foreach (var column in WorkspaceView.Columns(document, boardId.Value)) ColumnsPanel.Children.Add(BuildColumn(column));
         var add = new Button { Content = T("+ New column"), VerticalAlignment = VerticalAlignment.Top, Margin = new(0,4,8,0) };
+        add.IsEnabled=CurrentCapabilities().ManageColumns;
         add.Click += async (_, _) => await RunAsync(() => ColumnDialogAsync(null));
         ColumnsPanel.Children.Add(add);
         DispatcherQueue.TryEnqueue(() => { if (!closed) BoardScroll.ChangeView(offset, null, null, true); });
@@ -47,7 +48,7 @@ public sealed partial class MainWindow
         };
         var dragHandle = new Border { Child = title, Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent) };
         ToolTipService.SetToolTip(dragHandle, T("Drag to move this column"));
-        EnableBoardDrag(dragHandle, column.Id, isColumn: true, visual: border);
+        if (!IsGitHubBoard) EnableBoardDrag(dragHandle, column.Id, isColumn: true, visual: border);
         header.Children.Add(dragHandle);
         var commands = new StackPanel { Orientation = collapsed ? Orientation.Vertical : Orientation.Horizontal, Spacing = 4 };
         var collapse = new Button { Content = collapsed ? "›" : "‹", Padding = new(10,3,10,3) };
@@ -62,6 +63,7 @@ public sealed partial class MainWindow
         if (!collapsed)
         {
             var add = new Button { Content = "+", Padding = new(10,3,10,3) };
+            add.IsEnabled=CurrentCapabilities().EditContent;
             AutomationProperties.SetName(add, T("New task in {0}", name));
             add.Click += async (_, _) => await OpenEditorAsync(null, column.Id);
             commands.Children.Add(add);
@@ -71,15 +73,15 @@ public sealed partial class MainWindow
         var flyout = new MenuFlyout();
         var columns = WorkspaceView.Columns(document!, column.BoardId).Select(x => x.Id).ToList();
         var index = columns.IndexOf(column.Id);
-        flyout.Items.Add(MenuItem(T("Move left"), async () => await store.CommitAsync(e => e.MoveColumn(column.Id, index - 1)), index > 0));
-        flyout.Items.Add(MenuItem(T("Move right"), async () => await store.CommitAsync(e => e.MoveColumn(column.Id, index + 1)), index < columns.Count - 1));
-        flyout.Items.Add(MenuItem(T("Edit column"), () => ColumnDialogAsync(column.Id)));
+        flyout.Items.Add(MenuItem(T("Move left"), async () => await store.CommitAsync(e => e.MoveColumn(column.Id, index - 1)), !IsGitHubBoard && index > 0));
+        flyout.Items.Add(MenuItem(T("Move right"), async () => await store.CommitAsync(e => e.MoveColumn(column.Id, index + 1)), !IsGitHubBoard && index < columns.Count - 1));
+        flyout.Items.Add(MenuItem(T("Edit column"), () => ColumnDialogAsync(column.Id),CurrentCapabilities().ManageColumns && (!IsGitHubBoard || GitHubStatusFor(column.Id) is not null)));
         flyout.Items.Add(new MenuFlyoutSeparator());
         flyout.Items.Add(MenuItem(T("Delete column"), async () =>
         {
             if (await ConfirmAsync(T("Delete column?"), T("Delete “{0}” and all its tasks?", name), T("Delete")))
                 await store.CommitAsync(e => e.DeleteColumn(column.Id));
-        }));
+        },!IsGitHubBoard));
         menu.Flyout = flyout; commands.Children.Add(menu); header.Children.Add(commands);
         var count = new TextBlock { Text = limit == 0 ? T("{0} tasks", tasks.Count) : $"{tasks.Count} / {limit}", FontSize = 12, TextWrapping = TextWrapping.Wrap };
         if (limit > 0 && tasks.Count >= limit)
@@ -124,6 +126,7 @@ public sealed partial class MainWindow
     }
     private FrameworkElement BuildCard(TaskData task)
     {
+        if (IsGitHubBoard) return BuildGitHubCard(task);
         var body = new StackPanel { Spacing = 7 };
         body.Children.Add(new TextBlock { Text = task.Title, TextWrapping = TextWrapping.Wrap, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
         if (!string.IsNullOrWhiteSpace(task.Description)) body.Children.Add(new TextBlock
@@ -144,11 +147,11 @@ public sealed partial class MainWindow
         menu.Items.Add(MenuItem(T("Edit task"), () => OpenEditorAsync(task.Id, task.ColumnId)));
         var cards = WorkspaceView.Tasks(document!, task.ColumnId).Select(x => x.Id).ToList();
         var index = cards.IndexOf(task.Id);
-        menu.Items.Add(MenuItem(T("Move up"), () => store.CommitAsync(e => e.MoveTask(task.Id, task.ColumnId, index - 1)), index > 0));
-        menu.Items.Add(MenuItem(T("Move down"), () => store.CommitAsync(e => e.MoveTask(task.Id, task.ColumnId, index + 1)), index < cards.Count - 1));
+        menu.Items.Add(MenuItem(T("Move up"), () => MoveCardAsync(task.Id, task.ColumnId, index - 1), index > 0));
+        menu.Items.Add(MenuItem(T("Move down"), () => MoveCardAsync(task.Id, task.ColumnId, index + 1), index < cards.Count - 1));
         var moveTo = new MenuFlyoutSubItem { Text = T("Move to column") };
         foreach (var column in WorkspaceView.Columns(document!, task.BoardId))
-            moveTo.Items.Add(MenuItem(column.Get<string>(Fields.Name), () => store.CommitAsync(e => e.MoveTask(task.Id, column.Id, int.MaxValue)), column.Id != task.ColumnId));
+            moveTo.Items.Add(MenuItem(column.Get<string>(Fields.Name), () => MoveCardAsync(task.Id, column.Id, int.MaxValue), column.Id != task.ColumnId));
         menu.Items.Add(moveTo);
         menu.Items.Add(MenuItem(T("Delete task"), async () =>
         {

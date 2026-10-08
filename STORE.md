@@ -4,6 +4,12 @@ Kanban Tasker SoloSync is distributed through Microsoft Store first. Microsoft s
 
 The GitHub repository contains source, release notes and release drafts. Do not publish the local test installer, its certificate, or the unsigned submission bundle as an end-user download. There is no GitHub update check or download server in the app.
 
+Optional [GitHub Projects](GITHUB.md) is separate from app updates. Its registered
+App, public Client ID and organization installation must be configured and the
+two-client live acceptance completed before feature integration/release. The
+feature branch changes neither product nor Store package version. Review the
+updated privacy text and cache/token retention when preparing a submission.
+
 ## Distribution profiles and versions
 
 [packaging/Distribution.props](packaging/Distribution.props) is the common source for manifest identity, PRI resource-index identity and app settings.

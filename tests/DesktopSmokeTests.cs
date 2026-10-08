@@ -115,6 +115,7 @@ public sealed partial class MainWindow
                         : File.ReadAllText(preferences.FilePath!) == "{broken json", "Startup never overwrites unavailable or damaged data");
                 }
                 await CaptureAsync("startup-" + SmokeProfile.Scenario);
+                if (SmokeProfile.Scenario == "first-run") await CheckGitHubBoardsAsync(Check,CaptureAsync);
                 await File.WriteAllTextAsync(Path.Combine(output, "result.json"), JsonSerializer.Serialize(new { success = true, checks }, new JsonSerializerOptions { WriteIndented = true }));
                 return;
             }
@@ -428,6 +429,7 @@ public sealed partial class MainWindow
             Check(TaskPane.IsPaneOpen && originalTask?.Id == taskId, "Choosing a calendar task opens its editor");
             CloseEditor();
             await CheckBoardGroupsAsync(Check, CaptureAsync);
+            await CheckGitHubBoardsAsync(Check, CaptureAsync);
             await File.WriteAllTextAsync(Path.Combine(output, "result.json"), JsonSerializer.Serialize(new { success = true, checks }, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch (Exception ex)

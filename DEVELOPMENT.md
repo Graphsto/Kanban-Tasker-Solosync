@@ -168,6 +168,25 @@ For an independently distributed fork, choose your own identity, publisher, Stor
 
 Keep this edition a solo application with one chosen UTF-8 JSON workspace, without requiring a server or an account. Sequential transfer between the user's devices is supported; simultaneous collaborative editing is not promised.
 
+The explicitly optional [GitHub Projects integration](GITHUB.md) uses GitHub as its
+remote data source. It does not change the local JSON format, merge, recovery or
+Nextcloud behavior. Its frequent polling does not provide an atomic collaborative
+lock. `IBoardSource` distinguishes identity and capabilities; local mutations go
+through `WorkspaceStore`, while GitHub mutations use a restricted API adapter.
+`GitHubBoardSource` stores canonical cards once per project, view membership
+separately, complete cached snapshots and a durable write journal under the local
+profile, separated by account. The transient UI workspace projection must never
+be committed to the local store. No GitHub credentials are needed in CI.
+
+Configure only the public `KanbanGitHubClientId` through
+`packaging/Distribution.props`. Authentication uses Device Flow and expiring user
+tokens; the Windows adapter protects them with current-user DPAPI. REST view reads
+apply saved filters; GraphQL reads fields/cards/permissions and supplies the
+allowlisted mutations. Never add repository issue writes or automatic retries of
+uncertain mutations. The journal is an audit record, not an offline queue. See
+`GitHubTests.cs` and `DesktopGitHubTests.cs` for simulated API and WinUI checks,
+and [the live acceptance procedure](GITHUB.md#acceptance-before-integration).
+
 The versioned document contains stable GUIDs, groups, boards, columns, tasks and field-level change stamps. Format **2** adds a `groups` collection and a nullable, versioned `groupId` field on every board. Format 1 is deliberately unsupported; this pre-release change has no migration. Older files are rejected without overwriting them. All devices sharing a workspace need a compatible app version.
 
 Groups have independent name stamps and terminal deletion markers. Deleting a group never deletes boards or tasks: references to deleted groups are displayed as ungrouped, including assignments from delayed files. Group visibility and the selected filter are local preferences; groups and board assignments are workspace data. Disabling the feature must not rewrite those assignments. Unsaved task drafts survive incoming reassignments by revealing all boards when necessary.

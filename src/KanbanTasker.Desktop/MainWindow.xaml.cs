@@ -23,7 +23,10 @@ public sealed partial class MainWindow : Window
     private readonly List<string> draftTags = [];
     private string? storageError;
     private string? lastErrorMessage;
-    private record Choice(Guid Id, string Name);
+    private record Choice(Guid Id, string Name, bool IsGitHub = false)
+    {
+        public Visibility GitHubVisibility => IsGitHub ? Visibility.Visible : Visibility.Collapsed;
+    }
     private record ReminderChoice(int? Minutes, string Name);
     private ReminderChoice[] ReminderChoices = [];
 
@@ -48,6 +51,7 @@ public sealed partial class MainWindow : Window
 #endif
         boardId = preferences.SelectedBoard;
         store = new(Path.Combine(LocalPreferences.DirectoryPath, "Recovery"), preferences.DeviceId);
+        InitializeGitHub();
         store.Changed += Store_Changed;
         BoardMenuButton.IsEnabled = CalendarButton.IsEnabled = false;
         if (preferences.FilePath is not null)
@@ -64,7 +68,8 @@ public sealed partial class MainWindow : Window
         };
         Activated += async (_, args) =>
         {
-            if (loaded && args.WindowActivationState != WindowActivationState.Deactivated) await store.RefreshAsync();
+            if (loaded && args.WindowActivationState != WindowActivationState.Deactivated)
+            { await store.RefreshAsync(); await RefreshGitHubAsync(true); }
         };
         AppWindow.Closing += async (_, args) =>
         {
@@ -122,6 +127,9 @@ public sealed partial class MainWindow : Window
         if (closed) return;
         loaded = true;
         openingStartupWorkspace = false;
+        try { await github.InitializeAsync(githubLifetime.Token); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { ShowError(ex.Message); }
+        githubTimer.Start();
 #if KANBAN_UI_SMOKE_TEST
         SmokeProfile.Trace("Initial workspace opened");
 #endif
@@ -145,10 +153,16 @@ public sealed partial class MainWindow : Window
         if (!boards.Any(x => x.Id == boardId)) boardId = boards.FirstOrDefault()?.Id;
         BoardPicker.ItemsSource = boards;
         BoardPicker.SelectedItem = boards.FirstOrDefault(x => x.Id == boardId);
+        if (boardId is { } selected && GitHubBoard(selected) is { } remote) document = GitHubProjection(remote.Project,remote.View);
         var board = document?.Boards.FirstOrDefault(x => x.Id == boardId);
         ToolTipService.SetToolTip(BoardPicker, board?.Get<string>(Fields.Notes) ?? T("Choose a board"));
-        BoardMenuButton.IsEnabled = document is not null;
-        CalendarButton.IsEnabled = boardId is not null;
+        BoardMenuButton.IsEnabled = true;
+        EditBoardMenuItem.IsEnabled = !IsGitHubBoard && boardId is not null;
+        DeleteBoardMenuItem.Text = T(IsGitHubBoard ? "Unlink GitHub board" : "Delete board");
+        DeleteBoardMenuItem.IsEnabled = boardId is not null;
+        RefreshGitHubMenuItem.IsEnabled = github.Registry.Links.Count > 0;
+        ReviewGitHubMenuItem.IsEnabled = github.Operations.Count > 0;
+        CalendarButton.IsEnabled = boardId is not null && !IsGitHubBoard;
         WelcomePanel.Visibility = boardId is null ? Visibility.Visible : Visibility.Collapsed;
         WelcomeActions.Visibility = document is null ? Visibility.Visible : Visibility.Collapsed;
         EmptyBoardButton.Visibility = document is not null ? Visibility.Visible : Visibility.Collapsed;
@@ -177,17 +191,25 @@ public sealed partial class MainWindow : Window
         }
         Title = board is null ? Distribution.AppDistribution.DisplayName : $"{board.Get<string>(Fields.Name)} — {Distribution.AppDistribution.DisplayName}";
         RenderBoard();
+        if (SelectedGitHubProject is { } githubProject)
+        {
+            PathText.Text = githubProject.Organization + " / " + githubProject.Title + " · GitHub";
+            ToolTipService.SetToolTip(PathText, "https://github.com/orgs/" + githubProject.Organization + "/projects/" + githubProject.Number);
+            StatusText.Text=T(github.Online(githubProject.Id) ? "GitHub connected" : "GitHub cached board · read-only");
+            ToolTipService.SetToolTip(StatusText,text.TranslateDiagnostic(github.Error(githubProject.Id) ?? ""));
+        }
         if (TaskPane.IsPaneOpen) RefreshDraftContext();
         rendering = false;
-        if (document is not null)
+        if (store.Current is { } localWorkspace)
         {
-            var warning = reminders.Update(document, text);
+            var warning = reminders.Update(localWorkspace, text);
             if (warning is not null && store.Status.State != StorageState.Error) ShowError(warning);
         }
     }
     private async void BoardPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (rendering || BoardPicker.SelectedItem is not Choice choice || choice.Id == boardId) return;
+        if (working && (githubEditor || IsGitHubBoard)) { Render(); return; }
         if (await CanDiscardDraftAsync())
         {
             CloseEditor(); boardId = choice.Id; preferences.SelectedBoard = boardId;
@@ -199,10 +221,11 @@ public sealed partial class MainWindow : Window
     {
         if (working) return;
         working = true;
+        if (githubEditor) ApplyGitHubEditorState();
         try { await action(); }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or System.Runtime.InteropServices.COMException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or System.Security.Cryptography.CryptographicException or System.Runtime.InteropServices.COMException)
         { ShowError(ex.Message); }
-        finally { working = false; }
+        finally { working = false; if (githubEditor) ApplyGitHubEditorState(); }
     }
     private void ShowError(string message)
     {

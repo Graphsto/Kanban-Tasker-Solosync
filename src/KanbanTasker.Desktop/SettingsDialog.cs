@@ -30,6 +30,7 @@ public sealed partial class MainWindow
         tabs.Items.Add(generalTab); tabs.Items.Add(appearanceTab); tabs.Items.Add(advancedTab); tabs.SelectedIndex = 0;
         bool? create = null;
         var updateSelected = false;
+        var githubSelected = false;
         var dialog = Dialog(T("Settings"), tabs);
         settingsDialog = dialog;
         var advancedBusy = false;
@@ -58,6 +59,18 @@ public sealed partial class MainWindow
             open.Click += (_, _) => { create = false; dialog.Hide(); };
             fresh.Click += (_, _) => { create = true; dialog.Hide(); };
             general.Children.Add(open); general.Children.Add(fresh);
+            Heading(general,"GitHub");
+            Paragraph(general,T("Optional GitHub boards are stored separately on this device. Editing requires a connection to GitHub."));
+            var linkGitHub=new Button { Name="LinkGitHubProject",Content=T("Link GitHub project") };
+            linkGitHub.Click += (_,_) => { githubSelected=true; dialog.Hide(); };
+            general.Children.Add(linkGitHub);
+            var signOut=new Button { Name="SignOutGitHub",Content=T("Sign out of GitHub"),IsEnabled=github.Registry.AccountId.Length > 0 };
+            signOut.Click += async (_,_) =>
+            {
+                try { githubTimer.Stop(); await WaitForGitHubRefreshAsync(); await githubAuthentication.SignOutAsync(); github.LockAll(); signOut.IsEnabled=false; }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { ShowError(ex.Message); }
+            };
+            general.Children.Add(signOut);
             Heading(general, T("App updates"));
             general.Children.Add(new TextBlock { Text = T("Installed version: {0}", CurrentVersion), IsTextSelectionEnabled = true });
             var storeChannel = Distribution.AppDistribution.IsStore;
@@ -135,6 +148,7 @@ public sealed partial class MainWindow
         try { await dialog.ShowAsync(); }
         finally { store.Changed -= groupsChanged; settingsDialog = null; }
         if (create is { } newFile) await SelectFileAsync(newFile);
+        else if (githubSelected) await LinkGitHubProjectAsync();
         else if (updateSelected)
         {
             if (Distribution.AppDistribution.IsStore) await OpenStoreAsync();

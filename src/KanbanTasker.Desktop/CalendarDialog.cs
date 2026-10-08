@@ -10,7 +10,7 @@ public sealed partial class MainWindow
 {
     private async void Calendar_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
-        if (document is null || boardId is not { } calendarBoard) return;
+        if (IsGitHubBoard || document is null || boardId is not { } calendarBoard) return;
         var calendar = new CalendarView
         {
             Name = "TaskCalendar", SelectionMode = CalendarViewSelectionMode.Single,

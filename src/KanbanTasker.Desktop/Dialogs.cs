@@ -8,12 +8,18 @@ public sealed partial class MainWindow
 {
     private async void NewBoard_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
-        if (document is null) await SelectFileAsync(true);
-        if (document is not null && await CanDiscardDraftAsync()) { CloseEditor(); await BoardDialogAsync(null); }
+        if (store.Current is null) await SelectFileAsync(true);
+        if (store.Current is not null && await CanDiscardDraftAsync()) { CloseEditor(); await BoardDialogAsync(null); }
     });
     private async void EditBoard_Click(object sender, RoutedEventArgs e) => await RunAsync(() => boardId is null ? Task.CompletedTask : BoardDialogAsync(boardId));
     private async void DeleteBoard_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
+        if (boardId is { } remoteId && GitHubBoard(remoteId) is { } remote)
+        {
+            if (await CanDiscardDraftAsync() && await ConfirmAsync(T("Unlink GitHub board?"),T("This only removes the local link. The GitHub project and its cards are kept."),T("Unlink")))
+            { await github.UnlinkAsync(remote.Project.Id,remote.View.Number); CloseEditor(); Render(); }
+            return;
+        }
         if (boardId is not { } id || document is null) return;
         var name = document.Boards.Single(x => x.Id == id).Get<string>(Fields.Name);
         if (await ConfirmAsync(T("Delete board?"), T("Delete “{0}”, all its columns and all its tasks?", name), T("Delete")))
@@ -23,14 +29,16 @@ public sealed partial class MainWindow
     });
     private async Task BoardDialogAsync(Guid? id)
     {
-        var board = document?.Boards.FirstOrDefault(x => x.Id == id);
+        var local=store.Current;
+        if (local is null || id is { } existing && GitHubBoard(existing) is not null) return;
+        var board = local.Boards.FirstOrDefault(x => x.Id == id);
         var originalName = board?.Get<string>(Fields.Name) ?? "";
         var originalNotes = board?.Get<string>(Fields.Notes) ?? "";
-        var originalGroup = board is null ? null : WorkspaceView.BoardGroupId(document!, board);
+        var originalGroup = board is null ? null : WorkspaceView.BoardGroupId(local, board);
         var selectedGroup = board is not null ? originalGroup
             : preferences.GroupsEnabled && preferences.SelectedGroup != Guid.Empty ? preferences.SelectedGroup : null;
         var group = new ComboBox { Name = "BoardGroupAssignment", Header = T("Board group"), DisplayMemberPath = "Name",
-            HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = BoardGroupChoices(document!),
+            HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = BoardGroupChoices(local),
             Visibility = preferences.GroupsEnabled ? Visibility.Visible : Visibility.Collapsed };
         group.SelectedItem = ((IEnumerable<GroupChoice>)group.ItemsSource).FirstOrDefault(g => g.Id == selectedGroup);
         var name = new TextBox { Header = T("Board name"), Text = originalName, MinWidth = 320 };
@@ -69,6 +77,7 @@ public sealed partial class MainWindow
     private async Task ColumnDialogAsync(Guid? id)
     {
         if (document is null || boardId is null) return;
+        if (IsGitHubBoard) { await GitHubColumnDialogAsync(id); return; }
         var parent = boardId.Value;
         var column = document.Columns.FirstOrDefault(x => x.Id == id);
         var originalName = column?.Get<string>(Fields.Name) ?? "";
@@ -100,7 +109,7 @@ public sealed partial class MainWindow
     }
     private async void ManageBoards_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
-        if (document is null) return;
+        if (store.Current is null) return;
         var list = new ListView { SelectionMode = ListViewSelectionMode.Multiple, DisplayMemberPath = "Name", MinWidth = 360, MaxHeight = 400 };
         void Populate() => list.ItemsSource = WorkspaceView.Boards(store.Current!).Select(x => new Choice(x.Id, x.Get<string>(Fields.Name))).ToArray();
         Populate();

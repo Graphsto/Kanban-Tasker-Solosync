@@ -22,6 +22,7 @@ An independent edition of [Hunter Johnson's original Kanban Tasker](https://gith
 - **Make it comfortable.** Follow the system theme or choose Dark, Light, Light blue or Dark blue. Windows contrast themes are respected.
 - **Five interface languages.** English, Deutsch, Español, Français and Italiano. Your board names and task content stay as you wrote them.
 - **Your boards in one file.** Work offline, keep the JSON wherever you choose and optionally let Nextcloud or another file-sync client transfer it.
+- **Optional [GitHub Projects](GITHUB.md).** Link organization Status boards beside local boards. GitHub drafts and card movements synchronize online; a registered GitHub App is required. Live acceptance is still pending.
 
 ## A closer look
 
