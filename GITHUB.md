@@ -61,6 +61,13 @@ displays a warning with a manual refresh button; automatic checks continue and
 the warning clears after a successful read. Unfiltered views use the complete
 project item list, while saved filters are still evaluated by GitHub.
 
+Moving or saving a card immediately shows **Waiting for GitHub…**. The original
+stays visible while a faded, non-interactive preview shows the proposed position
+or content. The preview disappears after the response has been checked. It is
+not an extra card or an offline queue. If a request fails, the preview is removed
+and the app shows the error; unsaved editor input stays available in memory.
+For automatically sorted views, GitHub determines the final position.
+
 When GitHub is unreachable, cached boards remain readable and all writes are
 disabled. There is no offline queue. Input already entered in an editor remains
 in memory and is locked until fresh data and permissions can be read. Closing

@@ -154,7 +154,7 @@ public sealed partial class MainWindow : Window
         if (!boards.Any(x => x.Id == boardId)) boardId = boards.FirstOrDefault()?.Id;
         BoardPicker.ItemsSource = boards;
         BoardPicker.SelectedItem = boards.FirstOrDefault(x => x.Id == boardId);
-        if (boardId is { } selected && GitHubBoard(selected) is { } remote) document = GitHubProjection(remote.Project,remote.View);
+        if (PresentedGitHubBoard is { } remote) document = GitHubProjection(remote.Project,remote.View);
         var board = document?.Boards.FirstOrDefault(x => x.Id == boardId);
         ToolTipService.SetToolTip(BoardPicker, board?.Get<string>(Fields.Notes) ?? T("Choose a board"));
         BoardMenuButton.IsEnabled = true;
@@ -206,6 +206,13 @@ public sealed partial class MainWindow : Window
             RetryGitHubButton.IsEnabled=!(github.RetryAt > DateTimeOffset.UtcNow);
         }
         else GitHubSyncNotice.IsOpen=false;
+        GitHubWriteProgress.Visibility=ShowingGitHubPending ? Visibility.Visible : Visibility.Collapsed;
+        GitHubWriteProgress.IsActive=ShowingGitHubPending;
+        if (ShowingGitHubPending)
+        {
+            StatusText.Text=T("Waiting for GitHub…");
+            ToolTipService.SetToolTip(StatusText,githubPending!.Preview.Title);
+        }
         if (TaskPane.IsPaneOpen) RefreshDraftContext();
         rendering = false;
         if (store.Current is { } localWorkspace)

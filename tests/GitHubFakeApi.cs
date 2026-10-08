@@ -14,6 +14,8 @@ public sealed class GitHubFakeApi : IGitHubApi
     public GitHubOption[]? LastOptions { get; private set; }
     public DateTimeOffset? RetryAt { get; set; }
     public TimeSpan MinimumRefreshInterval => TimeSpan.FromSeconds(5);
+    public Func<CancellationToken,Task>? BeforeRead { get; set; }
+    public Func<CancellationToken,Task>? BeforeWrite { get; set; }
     public static GitHubProjectSnapshot Fixture()
     {
         var date=new DateTimeOffset(2026,10,8,10,0,0,TimeSpan.Zero);
@@ -29,7 +31,11 @@ public sealed class GitHubFakeApi : IGitHubApi
     public Task<(string Id,string Login)> ViewerAsync(CancellationToken ct=default) { Check(); return Task.FromResult((AccountId,"tester")); }
     public Task<GitHubOrganization[]> OrganizationsAsync(CancellationToken ct=default) => Task.FromResult<GitHubOrganization[]>([new("example","Example")]);
     public Task<GitHubProjectSummary[]> ProjectsAsync(string organization,CancellationToken ct=default) => Task.FromResult<GitHubProjectSummary[]>([new("P1",1,"Project",organization)]);
-    public Task<GitHubProjectSnapshot> ProjectAsync(string id,CancellationToken ct=default) { Check(); return Task.FromResult(Snapshot with { FetchedAt=DateTimeOffset.UtcNow }); }
+    public async Task<GitHubProjectSnapshot> ProjectAsync(string id,CancellationToken ct=default)
+    {
+        if (BeforeRead is { } wait) await wait(ct);
+        Check(); return Snapshot with { FetchedAt=DateTimeOffset.UtcNow };
+    }
     public Task<GitHubCard> CreateDraftAsync(string project,string title,string body,string operation,CancellationToken ct=default)
     {
         Check(); Creates++; Writes++;
@@ -38,26 +44,26 @@ public sealed class GitHubFakeApi : IGitHubApi
         if (FailAfterCreate) throw new GitHubApiException("Connection lost",true);
         return Task.FromResult(card);
     }
-    public Task UpdateDraftAsync(string contentId,GitHubEdit edit,CancellationToken ct=default)
+    public async Task UpdateDraftAsync(string contentId,GitHubEdit edit,CancellationToken ct=default)
     {
+        if (BeforeWrite is { } wait) await wait(ct);
         Check(); Writes++;
         Snapshot=Snapshot with { Cards=Snapshot.Cards.Select(c => c.ContentId == contentId ? c with { Title=edit.Title ?? c.Title,Body=edit.Body ?? c.Body,UpdatedAt=DateTimeOffset.UtcNow } : c).ToArray() };
-        return Task.CompletedTask;
     }
-    public Task SetStatusAsync(string project,string item,string field,string? option,CancellationToken ct=default)
+    public async Task SetStatusAsync(string project,string item,string field,string? option,CancellationToken ct=default)
     {
+        if (BeforeWrite is { } wait) await wait(ct);
         Check(); Writes++;
         if (FailStatus) throw new GitHubApiException("Status request failed",true);
         Snapshot=Snapshot with { Cards=Snapshot.Cards.Select(c => c.Id == item ? c with { StatusId=option,UpdatedAt=DateTimeOffset.UtcNow } : c).ToArray() };
-        return Task.CompletedTask;
     }
-    public Task PositionAsync(string project,string item,string? after,CancellationToken ct=default)
+    public async Task PositionAsync(string project,string item,string? after,CancellationToken ct=default)
     {
+        if (BeforeWrite is { } wait) await wait(ct);
         Check(); Writes++;
         var cards=Snapshot.Cards.Where(c => c.Id != item).ToList(); var moved=Snapshot.Cards.Single(c => c.Id == item);
         cards.Insert(after is null ? 0 : cards.FindIndex(c => c.Id == after)+1,moved);
         Snapshot=Snapshot with { Cards=cards.ToArray(),Views=Snapshot.Views.Select(v => v with { ItemIds=cards.Where(c => v.ItemIds.Contains(c.Id)).Select(c => c.Id).ToArray() }).ToArray() };
-        return Task.CompletedTask;
     }
     public Task RemoveAsync(string project,string item,CancellationToken ct=default)
     {

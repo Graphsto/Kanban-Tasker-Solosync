@@ -33,7 +33,8 @@ public sealed partial class MainWindow
     }
     private bool IsGitHubBoard => SelectedGitHubProject is not null;
     private IBoardSource CurrentBoardSource => IsGitHubBoard ? github : localBoards;
-    private BoardCapabilities CurrentCapabilities(Guid? card = null) => CurrentBoardSource.Capabilities(boardId?.ToString() ?? "",card?.ToString());
+    private BoardCapabilities CurrentCapabilities(Guid? card = null) => ShowingGitHubPending
+        ? new(false,false,false,false,false) : CurrentBoardSource.Capabilities(boardId?.ToString() ?? "",card?.ToString());
     private void InitializeGitHub()
     {
         var directory = System.IO.Path.Combine(LocalPreferences.DirectoryPath,"GitHub");
@@ -123,7 +124,8 @@ public sealed partial class MainWindow
         var siblings = WorkspaceView.Tasks(document!,column).Where(c => c.Id != id).ToArray();
         var anchor = index <= 0 || siblings.Length == 0 ? null : GitHubCardFor(siblings[Math.Min(index,siblings.Length)-1].Id)?.Id;
         var status=GitHubStatusFor(column);
-        await ResolveGitHubConflictsAsync(accepted => github.MoveAsync(entry.Project.Id,original,status,anchor,!entry.View.Sorted,accepted,githubLifetime.Token,order));
+        await ResolveGitHubConflictsAsync(accepted => WithGitHubPendingAsync(id,new(null,null,true,status),index,
+            () => github.MoveAsync(entry.Project.Id,original,status,anchor,!entry.View.Sorted,accepted,githubLifetime.Token,order)));
     }
     private async Task<bool> RemoveCardAsync(Guid id,GitHubCard? baseline=null)
     {
@@ -176,20 +178,23 @@ public sealed partial class MainWindow
     }
     private FrameworkElement BuildGitHubCard(TaskData task)
     {
-        var remote=GitHubCardFor(task.Id)!;
-        var order=SelectedGitHubProject!.Cards.Select(c => c.Id).ToArray();
+        var project=PresentedGitHubBoard!.Value.Project;
+        var remote=project.Cards.Single(c => GitHubIdentity.Card(project.Id,c.Id) == task.Id);
+        var order=project.Cards.Select(c => c.Id).ToArray();
         var capabilities=CurrentCapabilities(task.Id);
         var body=new StackPanel { Spacing=7 };
         body.Children.Add(new TextBlock { Text=task.Title,TextWrapping=TextWrapping.Wrap,FontWeight=Microsoft.UI.Text.FontWeights.SemiBold });
         if (!string.IsNullOrEmpty(task.Description)) body.Children.Add(new TextBlock { Text=task.Description,TextWrapping=TextWrapping.Wrap,MaxLines=4,TextTrimming=TextTrimming.CharacterEllipsis,Foreground=Brush("TextFillColorSecondaryBrush") });
         body.Children.Add(new TextBlock { Text=T(remote.Kind == GitHubCardKind.Draft ? "GitHub draft" : "GitHub issue · content read-only"),FontSize=12,Foreground=Brush("TextFillColorSecondaryBrush") });
+        if (ShowingGitHubPending && githubPending!.CardId == task.Id)
+            body.Children.Add(new TextBlock { Text=T("Waiting for GitHub…"),FontSize=12,TextWrapping=TextWrapping.Wrap });
         if (remote.Url is { } url && Uri.TryCreate(url,UriKind.Absolute,out var uri) && uri.Scheme == "https" && uri.Host == "github.com")
             body.Children.Add(new HyperlinkButton { Content=T("Open on GitHub"),NavigateUri=uri,Padding=new(0) });
         var card=new Border { Child=body,Tag=task.Id,Padding=new(12),CornerRadius=new(6),BorderThickness=new(1),BorderBrush=Brush("CardStrokeColorDefaultBrush"),Background=Brush("CardBackgroundFillColorDefaultBrush") };
         AutomationProperties.SetName(card,task.Title+", GitHub");
         if (capabilities.MoveCards) EnableBoardDrag(card,task.Id,false);
         var menu=new MenuFlyout();
-        menu.Items.Add(MenuItem(T("Open card"),() => OpenEditorAsync(task.Id,task.ColumnId,allowDuringAction:true)));
+        menu.Items.Add(MenuItem(T("Open card"),() => OpenEditorAsync(task.Id,task.ColumnId,allowDuringAction:true),!ShowingGitHubPending));
         var siblings=WorkspaceView.Tasks(document!,task.ColumnId).Select(c => c.Id).ToList(); var index=siblings.IndexOf(task.Id);
         menu.Items.Add(MenuItem(T("Move up"),() => MoveCardAsync(task.Id,task.ColumnId,index-1,remote,order),capabilities.ReorderCards && index>0));
         menu.Items.Add(MenuItem(T("Move down"),() => MoveCardAsync(task.Id,task.ColumnId,index+1,remote,order),capabilities.ReorderCards && index<siblings.Count-1));

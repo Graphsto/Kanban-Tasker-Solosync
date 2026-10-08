@@ -58,6 +58,7 @@ public sealed partial class MainWindow
         && (!TaskDataEqual(ReadTaskDraft(), initialDraft) || TagInput.Text.Length > 0);
     private async Task OpenEditorAsync(Guid? id, Guid columnId, bool allowDuringAction=false)
     {
+        if (ShowingGitHubPending) return;
         if (working && !allowDuringAction && (githubEditor || IsGitHubBoard)) return;
         if (document is null || boardId is null || !await CanDiscardDraftAsync()) return;
         if (IsGitHubBoard && id is null && !CurrentCapabilities().EditContent) return;
@@ -103,7 +104,9 @@ public sealed partial class MainWindow
             ApplyGitHubEditorState();
             var current = githubOriginal is null ? null : SelectedGitHubProject!.Cards.FirstOrDefault(c => c.Id == githubOriginal.Id);
             DraftNotice.IsOpen = !CurrentCapabilities(originalTask?.Id).MoveCards || githubOriginal is not null && current != githubOriginal;
-            DraftNotice.Message = T(!github.Online(SelectedGitHubProject!.Id) ? "GitHub cached board · read-only"
+            DraftNotice.Severity = InfoBarSeverity.Informational;
+            DraftNotice.Message = T(ShowingGitHubPending ? "Waiting for GitHub…"
+                : !github.Online(SelectedGitHubProject!.Id) ? "GitHub cached board · read-only"
                 : githubOriginal is not null && current is null ? "This card was removed from GitHub. Your editor cannot restore it."
                 : github.Operations.Any(o => o.ProjectId == SelectedGitHubProject.Id) ? "A previous GitHub write needs review before more changes can be made."
                 : "This card changed on GitHub. Saving will check for conflicts.");
@@ -151,7 +154,8 @@ public sealed partial class MainWindow
                 githubOriginal is null || GitHubStatusFor(draft.ColumnId) != githubOriginal.StatusId,GitHubStatusFor(draft.ColumnId));
             try
             {
-                if (!await ResolveGitHubConflictsAsync(accepted => github.SaveAsync(projectId,original,edit,accepted,githubLifetime.Token),
+                if (!await ResolveGitHubConflictsAsync(accepted => WithGitHubPendingAsync(originalTask?.Id,edit,null,
+                    () => github.SaveAsync(projectId,original,edit,accepted,githubLifetime.Token)),
                     (field,_) => edit=field switch { "Title" => edit with { Title=null }, "Description" => edit with { Body=null }, "Status" => edit with { ChangeStatus=false }, _ => edit }))
                 { RefreshDraftContext(); return; }
             }
@@ -194,6 +198,7 @@ public sealed partial class MainWindow
         TaskTitle.IsReadOnly=TaskDescription.IsReadOnly=remote && !capabilities.EditContent;
         TaskColumn.IsEnabled=!remote || capabilities.MoveCards;
         SaveTaskButton.IsEnabled=!remote || capabilities.MoveCards;
+        SaveTaskButton.Content=T(remote && ShowingGitHubPending ? "Saving…" : "Save");
         DeleteTaskButton.IsEnabled=!remote || capabilities.RemoveCards;
         DeleteTaskButton.Content=T(remote ? "Remove" : "Delete");
         ToolTipService.SetToolTip(DeleteTaskButton,remote ? T("Remove from GitHub project") : T("Delete"));

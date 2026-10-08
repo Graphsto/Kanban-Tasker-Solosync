@@ -178,6 +178,13 @@ separately, complete cached snapshots and a durable write journal under the loca
 profile, separated by account. The transient UI workspace projection must never
 be committed to the local store. No GitHub credentials are needed in CI.
 
+`GitHubPendingChanges` holds only in-memory presentation state while a card write
+and its verification run. It pins the confirmed view and inserts a passive faded
+preview into the rendered list, without adding it to any data model or cache.
+Each API attempt clears this state in `finally`, including failures and conflict
+choices. The desktop tests delay preflight reads, writes and verification to
+exercise the waiting indicator, preview placement, editing locks and cleanup.
+
 Configure only the public `KanbanGitHubClientId` through
 `packaging/Distribution.props`. Authentication uses Device Flow and expiring user
 tokens; the Windows adapter protects them with current-user DPAPI. REST view reads
