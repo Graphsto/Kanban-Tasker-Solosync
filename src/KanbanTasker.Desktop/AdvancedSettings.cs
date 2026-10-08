@@ -28,6 +28,33 @@ public sealed partial class MainWindow
         actions.Children.Add(create); actions.Children.Add(rename); actions.Children.Add(delete);
         manager.Children.Add(picker); manager.Children.Add(name); manager.Children.Add(actions); manager.Children.Add(hint);
         panel.Children.Add(enabled); panel.Children.Add(description); panel.Children.Add(manager); panel.Children.Add(error);
+        var githubGroups=new ComboBox { Name="ManageGitHubGroup",Header=T("GitHub project groups"),DisplayMemberPath="Name",HorizontalAlignment=HorizontalAlignment.Stretch };
+        var removeGithubGroup=new Button { Name="RemoveGitHubGroup",Content=T("Remove GitHub group") };
+        var githubGroupHint=new TextBlock { Text=T("Removing a GitHub group keeps its linked boards under Ungrouped. Nothing is deleted on GitHub."),TextWrapping=TextWrapping.Wrap };
+        panel.Children.Add(githubGroups); panel.Children.Add(removeGithubGroup); panel.Children.Add(githubGroupHint);
+        string? confirmGithubGroup=null;
+        void RefreshGitHubGroups()
+        {
+            var choices=github.Registry.GroupedProjects.Where(id => github.Projects.ContainsKey(id))
+                .Select(id => new Choice(KanbanTasker.Core.GitHub.GitHubIdentity.Group(id),github.Projects[id].Title,true)).ToArray();
+            var previous=(githubGroups.SelectedItem as Choice)?.Id;
+            githubGroups.ItemsSource=choices;
+            githubGroups.SelectedItem=choices.FirstOrDefault(g => g.Id == previous) ?? choices.FirstOrDefault();
+            removeGithubGroup.IsEnabled=githubGroups.SelectedItem is Choice;
+            githubGroups.Visibility=removeGithubGroup.Visibility=githubGroupHint.Visibility=choices.Length>0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        githubGroups.SelectionChanged += (_,_) => { confirmGithubGroup=null; removeGithubGroup.Content=T("Remove GitHub group"); };
+        removeGithubGroup.Click += async (_,_) =>
+        {
+            if (githubGroups.SelectedItem is not Choice choice) return;
+            var project=github.Registry.GroupedProjects.First(id => KanbanTasker.Core.GitHub.GitHubIdentity.Group(id) == choice.Id);
+            if (confirmGithubGroup != project) { confirmGithubGroup=project; removeGithubGroup.Content=T("Confirm delete"); return; }
+            setBusy(true);
+            try { await github.UngroupAsync(project); RefreshGitHubGroups(); Render(); }
+            catch (IOException ex) { error.Text=text.TranslateDiagnostic(ex.Message); }
+            finally { setBusy(false); }
+        };
+        RefreshGitHubGroups();
         Guid? confirmDelete = null;
         bool refreshing = false, busy = false;
         void ResetConfirmation() { confirmDelete = null; delete.Content = T("Delete"); }

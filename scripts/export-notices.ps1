@@ -7,6 +7,7 @@ if ((Get-FileHash -LiteralPath $sdkLicense -Algorithm SHA256).Hash -ne 'DD07EB17
 }
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repo 'build/legal' }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $repo 'packaging/licenses/Octicons-LICENSE.txt') -Destination $OutputDirectory
 $packages = @{}
 $packageDirectories = @{}
 $projects = if ($Channel -eq 'Store') { @('KanbanTasker.Desktop.Store') } else { @('KanbanTasker.Desktop','KanbanTasker.Setup') }

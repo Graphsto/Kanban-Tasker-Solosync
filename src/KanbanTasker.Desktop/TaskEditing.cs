@@ -1,4 +1,5 @@
 using KanbanTasker.Core;
+using KanbanTasker.Core.GitHub;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -58,7 +59,10 @@ public sealed partial class MainWindow
     private async Task OpenEditorAsync(Guid? id, Guid columnId)
     {
         if (document is null || boardId is null || !await CanDiscardDraftAsync()) return;
+        if (IsGitHubBoard && id is null && !CurrentCapabilities().EditContent) return;
         EnsureEditorLoaded();
+        githubEditor = IsGitHubBoard;
+        githubOriginal = id is { } remoteId && githubEditor ? GitHubCardFor(remoteId) : null;
         taskSaveFailed = false;
         originalTask = id is null ? null : TaskData.From(document.Tasks.Single(x => x.Id == id));
         var data = originalTask ?? new TaskData { BoardId = boardId.Value, ColumnId = columnId };
@@ -78,15 +82,32 @@ public sealed partial class MainWindow
         // Capture the presented values, including any normalization by date/time controls.
         // Remote updates and changes of language/theme must never replace this baseline.
         initialDraft = ReadTaskDraft();
+        ApplyGitHubEditorState();
         TaskTitle.Focus(FocusState.Programmatic);
     }
     private void RefreshDraftContext()
     {
+        if (githubEditor && (!IsGitHubBoard || boardId != draftBoardId))
+        {
+            ApplyGitHubEditorState(); DraftNotice.IsOpen=true;
+            DraftNotice.Message=T("GitHub cached board · read-only"); return;
+        }
         if (document is null) return;
         var selected = (TaskColumn.SelectedItem as Choice)?.Id ?? originalTask?.ColumnId ?? draftColumnId;
         var choices = WorkspaceView.Columns(document, draftBoardId).Select(x => new Choice(x.Id, x.Get<string>(Fields.Name))).ToList();
         if (!choices.Any(x => x.Id == selected)) choices.Add(new(selected, T("Column no longer available")));
         TaskColumn.ItemsSource = choices; TaskColumn.SelectedItem = choices.FirstOrDefault(x => x.Id == selected);
+        if (githubEditor)
+        {
+            ApplyGitHubEditorState();
+            var current = githubOriginal is null ? null : SelectedGitHubProject!.Cards.FirstOrDefault(c => c.Id == githubOriginal.Id);
+            DraftNotice.IsOpen = !CurrentCapabilities(originalTask?.Id).MoveCards || githubOriginal is not null && current != githubOriginal;
+            DraftNotice.Message = T(!github.Online(SelectedGitHubProject!.Id) ? "GitHub cached board · read-only"
+                : githubOriginal is not null && current is null ? "This card was removed from GitHub. Your editor cannot restore it."
+                : github.Operations.Any(o => o.ProjectId == SelectedGitHubProject.Id) ? "A previous GitHub write needs review before more changes can be made."
+                : "This card changed on GitHub. Saving will check for conflicts.");
+            return;
+        }
         if (taskSaveFailed)
         {
             DraftNotice.IsOpen = true; DraftNotice.Severity = InfoBarSeverity.Warning;
@@ -117,6 +138,23 @@ public sealed partial class MainWindow
     private async void SaveTask_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
         if (TaskColumn.SelectedItem is not Choice) throw new ArgumentException("Choose a column.");
+        if (githubEditor)
+        {
+            if (!IsGitHubBoard || boardId != draftBoardId) throw new GitHubApiException("GitHub is unreachable. Cached boards are read-only.");
+            if (!CurrentCapabilities(originalTask?.Id).MoveCards) throw new GitHubApiException("GitHub is unreachable. Cached boards are read-only.");
+            var draft=ReadTaskDraft();
+            var edit=new GitHubEdit(githubOriginal is null || draft.Title != initialDraft?.Title ? draft.Title : null,
+                githubOriginal is null || draft.Description != initialDraft?.Description ? draft.Description : null,
+                githubOriginal is null || GitHubStatusFor(draft.ColumnId) != githubOriginal.StatusId,GitHubStatusFor(draft.ColumnId));
+            try
+            {
+                if (!await ResolveGitHubConflictsAsync(accepted => github.SaveAsync(SelectedGitHubProject!.Id,githubOriginal,edit,accepted,githubLifetime.Token),
+                    (field,_) => edit=field switch { "Title" => edit with { Title=null }, "Description" => edit with { Body=null }, "Status" => edit with { ChangeStatus=false }, _ => edit }))
+                { RefreshDraftContext(); return; }
+            }
+            catch { taskSaveFailed=true; RefreshDraftContext(); throw; }
+            CloseEditor(); Render(); return;
+        }
         try { await store.CommitAsync(editor => editor.SaveTask(ReadTaskDraft(), originalTask)); }
         catch { taskSaveFailed = true; RefreshDraftContext(); throw; }
         CloseEditor(); Render();
@@ -127,17 +165,37 @@ public sealed partial class MainWindow
     }
     private async void DeleteTask_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
-        if (originalTask is not null && await ConfirmAsync(T("Delete task?"), T("Delete “{0}”?", originalTask.Title), T("Delete")))
+        if (githubEditor && (!IsGitHubBoard || boardId != draftBoardId)) throw new GitHubApiException("GitHub is unreachable. Cached boards are read-only.");
+        if (originalTask is not null && await ConfirmAsync(T(githubEditor ? "Remove from GitHub project?" : "Delete task?"),
+            T(githubEditor ? "Remove “{0}” from this GitHub project?" : "Delete “{0}”?", originalTask.Title),T(githubEditor ? "Remove" : "Delete")))
         {
-            await store.CommitAsync(editor => editor.DeleteTask(originalTask.Id)); CloseEditor(); Render();
+            if (await RemoveCardAsync(originalTask.Id,githubOriginal)) { CloseEditor(); Render(); }
         }
     });
     private void CloseEditor()
     {
         closeEditorRequested = true;
         taskSaveFailed = false;
+        githubOriginal = null;
+        githubEditor = false;
         TaskPane.IsPaneOpen = false; originalTask = null; initialDraft = null; draftTags.Clear();
         if (EditorLoaded) { TaskColumn.SelectedItem = null; TagInput.Text = ""; }
+    }
+    private void ApplyGitHubEditorState()
+    {
+        if (!EditorLoaded) return;
+        var remote=githubEditor;
+        var capabilities=remote && (!IsGitHubBoard || boardId != draftBoardId) ? new BoardCapabilities(false,false,false,false,false) : CurrentCapabilities(originalTask?.Id);
+        TaskTitle.IsReadOnly=TaskDescription.IsReadOnly=remote && !capabilities.EditContent;
+        TaskColumn.IsEnabled=!remote || capabilities.MoveCards;
+        SaveTaskButton.IsEnabled=!remote || capabilities.MoveCards;
+        DeleteTaskButton.IsEnabled=!remote || capabilities.RemoveCards;
+        DeleteTaskButton.Content=T(remote ? "Remove" : "Delete");
+        ToolTipService.SetToolTip(DeleteTaskButton,remote ? T("Remove from GitHub project") : T("Delete"));
+        if (remote) DeleteTaskButton.Visibility=githubOriginal?.Kind == GitHubCardKind.Draft ? Visibility.Visible : Visibility.Collapsed;
+        TaskPriority.Visibility=TagInput.Visibility=TagList.Visibility=DateInformation.Visibility=remote ? Visibility.Collapsed : Visibility.Visible;
+        if (remote && githubOriginal?.Kind == GitHubCardKind.Issue)
+            EditorHeading.Text=T("GitHub issue · content read-only");
     }
     private void RenderTags()
     {

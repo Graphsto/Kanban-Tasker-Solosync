@@ -1,4 +1,5 @@
 using KanbanTasker.Core;
+using KanbanTasker.Core.GitHub;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -28,6 +29,8 @@ public sealed partial class MainWindow
         public Point Start { get; } = start;
         public Point Position { get; set; } = start;
         public bool Moving { get; set; }
+        public GitHubCard? GitHubOriginal { get; set; }
+        public string[]? GitHubOrder { get; set; }
     }
     private sealed record BoardDrop(Guid Column, int Index, Border Highlight, Thickness Edge);
     private BoardDrag? boardDrag;
@@ -57,10 +60,12 @@ public sealed partial class MainWindow
         source.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler((_, e) =>
         {
             if (working || document is null || boardId is null || !e.GetCurrentPoint(source).Properties.IsLeftButtonPressed) return;
+            if (IsGitHubBoard && (isColumn || !CurrentCapabilities(id).MoveCards)) return;
             CancelBoardDrag();
             var draggedVisual = visual ?? source;
             boardDrag = new(source, draggedVisual, id, isColumn, document.DocumentId, boardId.Value, e.Pointer,
                 e.GetCurrentPoint(Root).Position, BoundsInRoot(draggedVisual));
+            if (IsGitHubBoard) { boardDrag.GitHubOriginal=GitHubCardFor(id); boardDrag.GitHubOrder=SelectedGitHubProject!.Cards.Select(c => c.Id).ToArray(); }
             if (!source.CapturePointer(e.Pointer)) { boardDrag = null; return; }
             e.Handled = true;
         }), true);
@@ -82,11 +87,8 @@ public sealed partial class MainWindow
             var target = drag.Moving ? FindBoardDrop(drag) : null;
             CancelBoardDrag(); e.Handled = true;
             if (target is not null)
-                await RunAsync(() => store.CommitAsync(editor =>
-                {
-                    if (drag.IsColumn) editor.MoveColumn(drag.Id, target.Index);
-                    else editor.MoveTask(drag.Id, target.Column, target.Index);
-                }));
+                await RunAsync(() => drag.IsColumn ? localBoards.CommitAsync(editor => editor.MoveColumn(drag.Id,target.Index))
+                    : MoveCardAsync(drag.Id,target.Column,target.Index,drag.GitHubOriginal,drag.GitHubOrder));
             else if (!drag.Moving && !drag.IsColumn && document is not null)
             {
                 var task = WorkspaceView.AllTasks(document).FirstOrDefault(t => t.Id == drag.Id && t.BoardId == drag.Board);

@@ -42,6 +42,8 @@
     <DefineConstants>$(DefineConstants);KANBAN_UI_SMOKE_TEST</DefineConstants>
   </PropertyGroup>
   <ItemGroup Condition="'$(KanbanUiSmokeTest)' == 'true'">
+    <Compile Include="..\..\tests\GitHubFakeApi.cs" Link="Tests\GitHubFakeApi.cs" />
+    <Compile Include="..\..\tests\DesktopGitHubTests.cs" Link="Tests\DesktopGitHubTests.cs" />
     <Compile Include="..\..\tests\DesktopSmokeTests.cs" Link="Tests\DesktopSmokeTests.cs" />
     <Compile Include="..\..\tests\DesktopShowcase.cs" Link="Tests\DesktopShowcase.cs" />
     <Compile Include="..\..\tests\DesktopGroupTests.cs" Link="Tests\DesktopGroupTests.cs" />

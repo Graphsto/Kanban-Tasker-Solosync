@@ -1,5 +1,11 @@
 # Third-party notices
 
+The GitHub indicator uses the Octicons `mark-github` vector from
+[primer/octicons](https://github.com/primer/octicons), copyright (c) GitHub Inc.,
+under the MIT License. Its preserved upstream license is
+[Octicons-LICENSE.txt](packaging/licenses/Octicons-LICENSE.txt) and is included by
+the notices exporter in package notices.
+
 This edition is based on Kanban Tasker / KanbanBoardUWP by Hunter Johnson.
 The original notice, `Copyright (c) 2019 hjohnson12`, and complete MIT license are
 preserved in `LICENSE` (installed as `LICENSE.txt`). Attribution does not imply

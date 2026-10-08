@@ -18,6 +18,9 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(BoardMenuButton, T("Board actions"));
         ToolTipService.SetToolTip(BoardMenuButton, T("Board actions"));
         EditBoardMenuItem.Text = T("Edit board");
+        LinkGitHubMenuItem.Text = T("Link GitHub project");
+        RefreshGitHubMenuItem.Text = T("Refresh GitHub boards");
+        ReviewGitHubMenuItem.Text = T("Review GitHub write");
         ManageBoardsMenuItem.Text = T("Manage boards");
         DeleteBoardMenuItem.Text = T("Delete board");
         AutomationProperties.SetName(SettingsButton, T("Settings"));

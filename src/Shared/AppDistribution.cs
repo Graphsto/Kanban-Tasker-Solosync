@@ -17,4 +17,5 @@ internal static class AppDistribution
     internal static Uri StoreUri => new("ms-windows-store://pdp/?ProductId=" + Get("StoreId"));
     internal static Uri StoreWebUri => new("https://apps.microsoft.com/detail/" + Get("StoreId"));
     internal static Uri PrivacyUri => new(Get("PrivacyUrl"));
+    internal static string GitHubClientId => Metadata.GetValueOrDefault("GitHubClientId") ?? "";
 }
