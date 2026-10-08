@@ -149,11 +149,18 @@ public sealed class GitHubApi(HttpClient http, Func<CancellationToken, Task<stri
             var hasRowGrouping = view.GetProperty("groupByFields").GetProperty("nodes").GetArrayLength() > 0;
             var sorts = view.GetProperty("sortByFields").GetProperty("nodes").EnumerateArray().ToArray();
             var number = view.GetProperty("number").GetInt32();
+            var filter = view.GetProperty("filter").GetString() ?? "";
             var ids = Array.Empty<string>();
             if (S(view, "layout") == "BOARD_LAYOUT" && columns.Length == 1 && S(columns[0], "id") == statusId && !hasRowGrouping)
             {
-                var visible = await PagesAsync($"https://api.github.com/orgs/{Uri.EscapeDataString(organization)}/projectsV2/{project.GetProperty("number").GetInt32()}/views/{number}/items?per_page=100", null, ct);
-                ids = visible.Select(v => S(v, "node_id")).Where(x => cards.Any(c => c.Id == x)).ToArray();
+                // An unfiltered view contains the complete, already paginated project item set.
+                // Do not make its availability depend on the redundant REST view endpoint.
+                if (string.IsNullOrWhiteSpace(filter)) ids=cards.Select(c => c.Id).ToArray();
+                else
+                {
+                    var visible = await PagesAsync($"https://api.github.com/orgs/{Uri.EscapeDataString(organization)}/projectsV2/{project.GetProperty("number").GetInt32()}/views/{number}/items?per_page=100", null, ct);
+                    ids = visible.Select(v => S(v, "node_id")).Where(x => cards.Any(c => c.Id == x)).ToArray();
+                }
                 if (sorts.Length == 0)
                 {
                     var membership=ids.ToHashSet(StringComparer.Ordinal);
@@ -171,7 +178,7 @@ public sealed class GitHubApi(HttpClient http, Func<CancellationToken, Task<stri
                 }
             }
             boardViews.Add(new(S(view, "id"), number, S(view, "name"), S(view, "layout"), columns.Length == 1 ? S(columns[0], "id") : null,
-                sorts.Length > 0, S(view, "filter"), ids, hasRowGrouping));
+                sorts.Length > 0, filter, ids, hasRowGrouping));
         }
         MinimumRefreshInterval=TimeSpan.FromSeconds(Math.Max(5,Math.Max(secondsPerRestRequest*Math.Max(1,restRequests-restBefore),
             secondsPerGraphPoint*Math.Max(1,graphPoints-graphBefore))*1.25));
@@ -329,6 +336,7 @@ public sealed class GitHubApi(HttpClient http, Func<CancellationToken, Task<stri
                 HttpStatusCode.Unauthorized => "GitHub sign-in expired. Sign in again.",
                 HttpStatusCode.Forbidden => "GitHub access denied. Check the App installation, organization approval, and project permissions.",
                 HttpStatusCode.NotFound => "The GitHub project is unavailable or access was revoked.",
+                _ when (int)response.StatusCode >= 500 => "GitHub is temporarily unavailable.",
                 _ => "GitHub could not complete the request. Refresh the board before trying again."
             }, mutation && (int)response.StatusCode >= 500);
             string? next = null;

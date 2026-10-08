@@ -134,6 +134,7 @@ public sealed partial class MainWindow : Window
         SmokeProfile.Trace("Initial workspace opened");
 #endif
         Render();
+        _ = RefreshGitHubAsync(true);
         if (taskbarPinPending) await ShowTaskbarPinOfferAsync();
 #if KANBAN_UI_SMOKE_TEST
         await RunDesktopSmokeTestsAsync();
@@ -195,9 +196,16 @@ public sealed partial class MainWindow : Window
         {
             PathText.Text = githubProject.Organization + " / " + githubProject.Title + " · GitHub";
             ToolTipService.SetToolTip(PathText, "https://github.com/orgs/" + githubProject.Organization + "/projects/" + githubProject.Number);
-            StatusText.Text=T(github.Online(githubProject.Id) ? "GitHub connected" : "GitHub cached board · read-only");
-            ToolTipService.SetToolTip(StatusText,text.TranslateDiagnostic(github.Error(githubProject.Id) ?? ""));
+            StatusText.Text=github.Online(githubProject.Id) ? T("GitHub · updated {0:T}",githubProject.FetchedAt.ToLocalTime()) : T("GitHub cached board · read-only");
+            var githubError=github.RetryAt > DateTimeOffset.UtcNow ? "GitHub rate limit reached. Editing is paused until requests are allowed again." : github.Error(githubProject.Id);
+            ToolTipService.SetToolTip(StatusText,githubError is null ? T("GitHub checks for changes automatically.") : text.TranslateDiagnostic(githubError));
+            GitHubSyncNotice.IsOpen=githubError is not null;
+            GitHubSyncNotice.Title=T("GitHub refresh failed");
+            GitHubSyncNotice.Message=text.TranslateDiagnostic(githubError ?? "")+" "+T("Updates are retried automatically.");
+            RetryGitHubButton.Content=T("Refresh GitHub boards");
+            RetryGitHubButton.IsEnabled=!(github.RetryAt > DateTimeOffset.UtcNow);
         }
+        else GitHubSyncNotice.IsOpen=false;
         if (TaskPane.IsPaneOpen) RefreshDraftContext();
         rendering = false;
         if (store.Current is { } localWorkspace)

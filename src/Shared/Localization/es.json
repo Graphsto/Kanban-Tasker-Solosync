@@ -1,4 +1,9 @@
 {
+  "GitHub · updated {0:T}": "GitHub · actualizado a las {0:T}",
+  "GitHub checks for changes automatically.": "Se comprueban automáticamente los cambios de GitHub.",
+  "GitHub refresh failed": "Error al actualizar GitHub",
+  "Updates are retried automatically.": "Las actualizaciones se reintentan automáticamente.",
+  "GitHub is temporarily unavailable.": "GitHub no está disponible temporalmente.",
   "Update in Microsoft Store": "Actualizar en Microsoft Store",
   "Microsoft Store manages updates according to your Windows settings.": "Microsoft Store administra las actualizaciones según la configuración de Windows.",
   "Privacy policy": "Política de privacidad",

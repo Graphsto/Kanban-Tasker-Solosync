@@ -11,6 +11,7 @@ public sealed partial class MainWindow
 {
     private async Task CheckGitHubBoardsAsync(Action<bool,string> check,Func<string,FrameworkElement?,Task> capture)
     {
+        check(githubTimer.IsEnabled && githubTimer.Interval==TimeSpan.FromSeconds(5),"Automatic GitHub polling starts with the application at five-second intervals");
         githubTimer.Stop(); github.Changed-=GitHubChanged;
         var api=new GitHubFakeApi();
         api.Snapshot=api.Snapshot with { Cards=api.Snapshot.Cards.Select(c => c.Kind == GitHubCardKind.Issue ? c with { Title="Issue ",Body="First line\nSecond line" } : c).ToArray() };
@@ -118,6 +119,39 @@ public sealed partial class MainWindow
         preferences.GroupsEnabled=false; preferences.SelectedGroup=null; Render();
         boardId=GitHubIdentity.Board("P1",2); Render();
         check(!CurrentCapabilities().ReorderCards && CurrentCapabilities().MoveCards,"Saved view sorting locks reordering while allowing Status moves");
+        boardId=GitHubIdentity.Board("P1",1); Render();
+        var beforePolling=api.Snapshot;
+        var pollingInterval=githubTimer.Interval;
+        try
+        {
+            // Exercise the real dispatcher tick without spending five seconds per fixture step.
+            githubTimer.Interval=TimeSpan.FromMilliseconds(50); githubRefreshTimes.Clear();
+            api.Snapshot=api.Snapshot with { Cards=api.Snapshot.Cards.Select(c => c.Id=="draft" ? c with { Title="Changed outside the app" } : c).ToArray() };
+            githubTimer.Start();
+            await WaitForAsync(() => FindAllVisual<TextBlock>(ColumnsPanel).Any(t => t.Text=="Changed outside the app"));
+            check(StatusText.Text==T("GitHub · updated {0:T}",github.Projects["P1"].FetchedAt.ToLocalTime()),"A timer refresh displays external edits and the last successful update time");
+            api.Offline=true; githubRefreshTimes.Clear();
+            await WaitForAsync(() => GitHubSyncNotice.IsOpen);
+            check(!CurrentCapabilities(draft).RemoveCards && GitHubSyncNotice.Message.Contains(T("Updates are retried automatically.")),"Failed background refresh explains the write lock and automatic retry");
+            api.Offline=false; githubRefreshTimes.Clear();
+            api.Snapshot=api.Snapshot with { Cards=api.Snapshot.Cards.Select(c => c.Id=="draft" ? c with { Title="Recovered automatically" } : c).ToArray() };
+            await WaitForAsync(() => !GitHubSyncNotice.IsOpen && FindAllVisual<TextBlock>(ColumnsPanel).Any(t => t.Text=="Recovered automatically"));
+            check(CurrentCapabilities(draft).RemoveCards,"The next timer refresh recovers draft removal without a manual refresh");
+        }
+        finally { githubTimer.Stop(); githubTimer.Interval=pollingInterval; }
+        await WaitForGitHubRefreshAsync();
+        var draftElement=(Border)columnLists.Values.SelectMany(l => l.Items.Cast<ListViewItem>()).Single(item => (Guid)item.Tag==draft).Content;
+        var draftMenu=(MenuFlyout)draftElement.ContextFlyout;
+        var removeDraft=draftMenu.Items.OfType<MenuFlyoutItem>().Single(item => item.Text==T("Remove from GitHub project"));
+        check(removeDraft.IsEnabled,"The rendered draft context menu allows removal after refresh recovery");
+        draftMenu.ShowAt(draftElement); await SettleAsync();
+        var removePeer=Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.CreatePeerForElement(removeDraft);
+        ((Microsoft.UI.Xaml.Automation.Provider.IInvokeProvider)removePeer.GetPattern(Microsoft.UI.Xaml.Automation.Peers.PatternInterface.Invoke)).Invoke();
+        await WaitForAsync(() => VisualTreeHelper.GetOpenPopupsForXamlRoot(Root.XamlRoot).Any(p => FindVisual<ContentDialog>(p.Child) is { IsLoaded:true }));
+        check(api.Snapshot.Cards.Any(c => c.Id=="draft"),"Draft removal waits for explicit confirmation");
+        PressGitHubDialog(GitHubTestDialog(),"PrimaryButton"); await WaitForAsync(() => !working);
+        check(!api.Snapshot.Cards.Any(c => c.Id=="draft") && !WorkspaceView.AllTasks(document!).Any(t => t.Id==draft),"Confirming removal updates GitHub and removes the card from the displayed board");
+        api.Snapshot=beforePolling; await github.RefreshAsync("P1"); Render();
         if (before is not null) check(before.SequenceEqual(WorkspaceJson.Serialize(store.Current!)),"GitHub actions never alter the local workspace JSON");
         else check(store.Current is null && store.FilePath is null,"GitHub is usable without opening or creating a local JSON file");
         var tokenPath=System.IO.Path.Combine(SmokeProfile.DirectoryPath,"test-credentials.bin");

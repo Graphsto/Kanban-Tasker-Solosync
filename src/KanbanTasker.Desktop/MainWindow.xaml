@@ -50,6 +50,9 @@
         </Grid>
         <StackPanel Grid.Row="1">
             <InfoBar x:Name="ErrorBar" Severity="Error" IsOpen="False" IsClosable="True" Margin="16,0,16,8"/>
+            <InfoBar x:Name="GitHubSyncNotice" Severity="Warning" IsOpen="False" IsClosable="False" Margin="16,0,16,8">
+                <InfoBar.ActionButton><Button x:Name="RetryGitHubButton" Click="RefreshGitHub_Click"/></InfoBar.ActionButton>
+            </InfoBar>
             <InfoBar x:Name="TaskbarPinNotice" IsOpen="False" IsClosable="True" Margin="16,0,16,8">
                 <InfoBar.ActionButton><Button x:Name="PinToTaskbarButton" Click="PinToTaskbar_Click"/></InfoBar.ActionButton>
             </InfoBar>

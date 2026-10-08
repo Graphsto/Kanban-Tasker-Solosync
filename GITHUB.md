@@ -56,6 +56,11 @@ also trigger reads. GitHub rate limits can lengthen these intervals or pause
 requests. This is frequent polling, with no atomic lock against another client
 or someone changing the project on GitHub.
 
+The status bar shows the last successful GitHub update time. A failed refresh
+displays a warning with a manual refresh button; automatic checks continue and
+the warning clears after a successful read. Unfiltered views use the complete
+project item list, while saved filters are still evaluated by GitHub.
+
 When GitHub is unreachable, cached boards remain readable and all writes are
 disabled. There is no offline queue. Input already entered in an editor remains
 in memory and is locked until fresh data and permissions can be read. Closing
