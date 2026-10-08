@@ -4,8 +4,8 @@
     <KanbanDisplayName>Kanban Tasker SoloSync</KanbanDisplayName>
     <KanbanStoreId>9P7HG1RBVBW6</KanbanStoreId>
     <KanbanPrivacyUrl>https://github.com/Graphsto/Kanban-Tasker-Solosync/blob/main/PRIVACY.md</KanbanPrivacyUrl>
-    <!-- Public GitHub App client ID; supplied for configured builds. Never embed a client secret. -->
-    <KanbanGitHubClientId Condition="'$(KanbanGitHubClientId)' == ''"></KanbanGitHubClientId>
+    <!-- Public client ID for github.com/apps/kanban-tasker-solosync. Never embed a client secret or private key. -->
+    <KanbanGitHubClientId Condition="'$(KanbanGitHubClientId)' == ''">Iv23liMgxY35gcqrfMJy</KanbanGitHubClientId>
   </PropertyGroup>
   <PropertyGroup Condition="'$(KanbanChannel)' == 'Local'">
     <KanbanIdentity>KanbanTasker.Revived</KanbanIdentity>

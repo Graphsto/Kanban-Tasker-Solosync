@@ -5,10 +5,12 @@ continue to use your chosen JSON file; GitHub links and cached cards use a
 separate directory in the app's local profile. GitHub also works without an open
 JSON file. Changing that file does not change GitHub links.
 
-This feature is being tested on `codex/github-projects`. A registered GitHub App
-and its public Client ID are still required before real sign-in and the live
-two-client acceptance test can be completed. Builds without this configuration
-explain the missing setup when you select **Link GitHub project**.
+This feature is being tested on `codex/github-projects`. Builds use the registered
+[Kanban Tasker Solosync GitHub App](https://github.com/apps/kanban-tasker-solosync),
+whose public Client ID is configured for both distribution channels. Installation,
+device-flow settings and real two-client acceptance still need to be verified.
+Builds without a Client ID explain the missing setup when you select
+**Link GitHub project**.
 
 ## Link a project
 
@@ -90,15 +92,24 @@ setup once; each user subsequently installs/authorizes the application as needed
    also needs access to the project and write rights for editing. With SAML SSO,
    start an active organization SAML session before reauthorization.
 6. Copy the **Client ID** shown on the registration's settings page. This is public
-   configuration and differs from the numeric App ID. Supply it as
-   `KanbanGitHubClientId` in `packaging/Distribution.props` or as an MSBuild property:
+   configuration and differs from the numeric App ID. The default registration
+   uses `Iv23liMgxY35gcqrfMJy` in `packaging/Distribution.props`. For a different
+   registration, override `KanbanGitHubClientId` as an MSBuild property:
 
    ```powershell
    dotnet build src/KanbanTasker.Desktop/KanbanTasker.Desktop.csproj -c Release -r win-x64 -p:Platform=x64 -p:KanbanGitHubClientId=YOUR_PUBLIC_CLIENT_ID
    ```
 
 Do not supply a Client Secret, private key or access token to the build. Device
-flow token refresh does not require the Client Secret. Credentials are protected
+flow and its token refresh require neither a private key nor a Client Secret.
+GitHub's private-key setup notice concerns authentication as the application
+itself, such as signing a JWT for an installation access token; this desktop
+client uses user access tokens instead. No private key needs to be generated for
+this flow. If one has already been downloaded as a `.pem` file, keep it in secure
+storage outside the repository and app. Never upload it to a chat or include it
+in a build. See GitHub's [private-key documentation](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/managing-private-keys-for-github-apps).
+
+Credentials are protected
 with Windows DPAPI for the current user; cached contents are ordinary local JSON.
 Signing out removes local credentials and locks cached boards. Revoke the App's
 authorization on GitHub as well if you want to remove its server-side access.
