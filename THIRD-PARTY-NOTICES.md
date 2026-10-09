@@ -31,7 +31,7 @@ generated .NET apphost are identified explicitly. Unknown binary sources or ship
 packages without license text fail packaging. Verification compares this inventory
 against the actual bytes inside each MSIX.
 
-The 2.4.1.8 Store payload includes these component families:
+The 2.4.2.0 Store payload includes these component families:
 
 | Component | Accompanying terms/notices |
 | --- | --- |
