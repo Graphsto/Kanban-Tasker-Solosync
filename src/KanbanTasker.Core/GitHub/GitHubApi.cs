@@ -92,12 +92,13 @@ public sealed class GitHubApi(HttpClient http, Func<CancellationToken, Task<stri
         var options = status.GetProperty("options").EnumerateArray().Select(o => new GitHubOption(S(o, "id"), S(o, "name"), S(o, "color"), S(o, "description"))).ToArray();
         await ConnectionAsync(id, "views", """
             id number name layout filter groupByFields(first:100) { nodes { ... on ProjectV2FieldCommon { id } } pageInfo { hasNextPage } }
+            verticalGroupByFields(first:100) { nodes { ... on ProjectV2FieldCommon { id } } pageInfo { hasNextPage } }
             sortByFields(first:100) { nodes { direction field { ... on ProjectV2FieldCommon { id name dataType } } } pageInfo { hasNextPage } }
             """, views, ct);
         var sortFields=views.SelectMany(v => v.GetProperty("sortByFields").GetProperty("nodes").EnumerateArray())
             .Select(s => s.GetProperty("field")).Where(f => S(f,"name") != "Title").DistinctBy(f => S(f,"id")).ToArray();
         const string valueSelection="""
-              ... on ProjectV2ItemFieldSingleSelectValue { optionId name field { id } }
+              ... on ProjectV2ItemFieldSingleSelectValue { optionId name field { ... on ProjectV2FieldCommon { id } } }
               ... on ProjectV2ItemFieldTextValue { text field { ... on ProjectV2FieldCommon { id } } }
               ... on ProjectV2ItemFieldNumberValue { number field { ... on ProjectV2FieldCommon { id } } }
               ... on ProjectV2ItemFieldDateValue { date field { ... on ProjectV2FieldCommon { id } } }
@@ -142,15 +143,24 @@ public sealed class GitHubApi(HttpClient http, Func<CancellationToken, Task<stri
         var boardViews = new List<GitHubView>();
         foreach (var view in views)
         {
-            RequireComplete(view.GetProperty("groupByFields")); RequireComplete(view.GetProperty("sortByFields"));
-            var groups = view.GetProperty("groupByFields").GetProperty("nodes").EnumerateArray().ToArray();
+            RequireComplete(view.GetProperty("groupByFields")); RequireComplete(view.GetProperty("verticalGroupByFields")); RequireComplete(view.GetProperty("sortByFields"));
+            // GitHub board columns are vertical groups; groupByFields configures swimlanes.
+            var columns = view.GetProperty("verticalGroupByFields").GetProperty("nodes").EnumerateArray().ToArray();
+            var hasRowGrouping = view.GetProperty("groupByFields").GetProperty("nodes").GetArrayLength() > 0;
             var sorts = view.GetProperty("sortByFields").GetProperty("nodes").EnumerateArray().ToArray();
             var number = view.GetProperty("number").GetInt32();
+            var filter = view.GetProperty("filter").GetString() ?? "";
             var ids = Array.Empty<string>();
-            if (S(view, "layout") == "BOARD_LAYOUT" && groups.Length == 1 && S(groups[0], "id") == statusId)
+            if (S(view, "layout") == "BOARD_LAYOUT" && columns.Length == 1 && S(columns[0], "id") == statusId && !hasRowGrouping)
             {
-                var visible = await PagesAsync($"https://api.github.com/orgs/{Uri.EscapeDataString(organization)}/projectsV2/{project.GetProperty("number").GetInt32()}/views/{number}/items?per_page=100", null, ct);
-                ids = visible.Select(v => S(v, "node_id")).Where(x => cards.Any(c => c.Id == x)).ToArray();
+                // An unfiltered view contains the complete, already paginated project item set.
+                // Do not make its availability depend on the redundant REST view endpoint.
+                if (string.IsNullOrWhiteSpace(filter)) ids=cards.Select(c => c.Id).ToArray();
+                else
+                {
+                    var visible = await PagesAsync($"https://api.github.com/orgs/{Uri.EscapeDataString(organization)}/projectsV2/{project.GetProperty("number").GetInt32()}/views/{number}/items?per_page=100", null, ct);
+                    ids = visible.Select(v => S(v, "node_id")).Where(x => cards.Any(c => c.Id == x)).ToArray();
+                }
                 if (sorts.Length == 0)
                 {
                     var membership=ids.ToHashSet(StringComparer.Ordinal);
@@ -167,8 +177,8 @@ public sealed class GitHubApi(HttpClient http, Func<CancellationToken, Task<stri
                     ids = (S(sort, "direction") == "DESC" ? ids.OrderByDescending(Value, comparer) : ids.OrderBy(Value, comparer)).ToArray();
                 }
             }
-            boardViews.Add(new(S(view, "id"), number, S(view, "name"), S(view, "layout"), groups.Length == 1 ? S(groups[0], "id") : null,
-                sorts.Length > 0, S(view, "filter"), ids));
+            boardViews.Add(new(S(view, "id"), number, S(view, "name"), S(view, "layout"), columns.Length == 1 ? S(columns[0], "id") : null,
+                sorts.Length > 0, filter, ids, hasRowGrouping));
         }
         MinimumRefreshInterval=TimeSpan.FromSeconds(Math.Max(5,Math.Max(secondsPerRestRequest*Math.Max(1,restRequests-restBefore),
             secondsPerGraphPoint*Math.Max(1,graphPoints-graphBefore))*1.25));
@@ -267,7 +277,14 @@ public sealed class GitHubApi(HttpClient http, Func<CancellationToken, Task<stri
                 if (!(RetryAt > DateTimeOffset.UtcNow)) RetryAt = DateTimeOffset.UtcNow.AddMinutes(1);
                 throw new GitHubApiException("GitHub rate limit reached. Editing is paused until requests are allowed again.",retryAt:RetryAt);
             }
-            throw new GitHubApiException("GitHub rejected the request. Check project permissions and refresh the board.", mutation && json.TryGetProperty("data", out var partial) && partial.ValueKind != JsonValueKind.Null);
+            var uncertain=mutation && json.TryGetProperty("data",out var partial) && partial.ValueKind != JsonValueKind.Null;
+            if (errors.ValueKind == JsonValueKind.Array && errors.EnumerateArray().Any(e => e.ValueKind == JsonValueKind.Object && e.TryGetProperty("extensions",out var extension)
+                && S(extension,"code") is "selectionMismatch" or "undefinedField" or "argumentNotAccepted" or "variableMismatch" or "missingRequiredArguments" or "GRAPHQL_VALIDATION_FAILED"))
+                throw new GitHubApiException("GitHub rejected an unsupported API request. Update the app and try again.",uncertain);
+            var denied=errors.ValueKind == JsonValueKind.Array && errors.EnumerateArray().Any(e => S(e,"type") is "FORBIDDEN" or "INSUFFICIENT_SCOPES");
+            throw new GitHubApiException(denied
+                ? "GitHub access denied. Check the App installation, organization approval, and project permissions."
+                : "GitHub could not complete the request. Refresh the board before trying again.",uncertain);
         }
         if (!json.TryGetProperty("data",out var data) || data.ValueKind != JsonValueKind.Object)
             throw new GitHubApiException("GitHub returned an incomplete response.",mutation);
@@ -319,6 +336,7 @@ public sealed class GitHubApi(HttpClient http, Func<CancellationToken, Task<stri
                 HttpStatusCode.Unauthorized => "GitHub sign-in expired. Sign in again.",
                 HttpStatusCode.Forbidden => "GitHub access denied. Check the App installation, organization approval, and project permissions.",
                 HttpStatusCode.NotFound => "The GitHub project is unavailable or access was revoked.",
+                _ when (int)response.StatusCode >= 500 => "GitHub is temporarily unavailable.",
                 _ => "GitHub could not complete the request. Refresh the board before trying again."
             }, mutation && (int)response.StatusCode >= 500);
             string? next = null;

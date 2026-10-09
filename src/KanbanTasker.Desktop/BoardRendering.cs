@@ -110,12 +110,13 @@ public sealed partial class MainWindow
                 Content = BuildCard(TaskData.From(task)), Tag = task.Id, Margin = new(0,0,0,8), Padding = new(0),
                 HorizontalContentAlignment = HorizontalAlignment.Stretch
             });
+            AddGitHubPendingPreview(list,column.Id);
             list.ItemClick += async (_, e) =>
             {
                 if (e.ClickedItem is FrameworkElement { Tag: Guid id }) await OpenEditorAsync(id, column.Id);
             };
             Grid.SetRow(list, 1); grid.Children.Add(list);
-            if (tasks.Count == 0)
+            if (list.Items.Count == 0)
             {
                 var hint = new TextBlock { Text = T("Drop a task here"), FontSize = 12, IsHitTestVisible = false,
                     Foreground = Brush("TextFillColorSecondaryBrush"), Margin = new(8,16,8,0), VerticalAlignment = VerticalAlignment.Top };

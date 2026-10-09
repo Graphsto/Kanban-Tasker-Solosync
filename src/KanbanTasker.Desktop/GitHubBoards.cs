@@ -33,7 +33,8 @@ public sealed partial class MainWindow
     }
     private bool IsGitHubBoard => SelectedGitHubProject is not null;
     private IBoardSource CurrentBoardSource => IsGitHubBoard ? github : localBoards;
-    private BoardCapabilities CurrentCapabilities(Guid? card = null) => CurrentBoardSource.Capabilities(boardId?.ToString() ?? "",card?.ToString());
+    private BoardCapabilities CurrentCapabilities(Guid? card = null) => ShowingGitHubPending
+        ? new(false,false,false,false,false) : CurrentBoardSource.Capabilities(boardId?.ToString() ?? "",card?.ToString());
     private void InitializeGitHub()
     {
         var directory = System.IO.Path.Combine(LocalPreferences.DirectoryPath,"GitHub");
@@ -123,7 +124,8 @@ public sealed partial class MainWindow
         var siblings = WorkspaceView.Tasks(document!,column).Where(c => c.Id != id).ToArray();
         var anchor = index <= 0 || siblings.Length == 0 ? null : GitHubCardFor(siblings[Math.Min(index,siblings.Length)-1].Id)?.Id;
         var status=GitHubStatusFor(column);
-        await ResolveGitHubConflictsAsync(accepted => github.MoveAsync(entry.Project.Id,original,status,anchor,!entry.View.Sorted,accepted,githubLifetime.Token,order));
+        await ResolveGitHubConflictsAsync(accepted => WithGitHubPendingAsync(id,new(null,null,true,status),index,
+            () => github.MoveAsync(entry.Project.Id,original,status,anchor,!entry.View.Sorted,accepted,githubLifetime.Token,order)));
     }
     private async Task<bool> RemoveCardAsync(Guid id,GitHubCard? baseline=null)
     {
@@ -176,20 +178,23 @@ public sealed partial class MainWindow
     }
     private FrameworkElement BuildGitHubCard(TaskData task)
     {
-        var remote=GitHubCardFor(task.Id)!;
-        var order=SelectedGitHubProject!.Cards.Select(c => c.Id).ToArray();
+        var project=PresentedGitHubBoard!.Value.Project;
+        var remote=project.Cards.Single(c => GitHubIdentity.Card(project.Id,c.Id) == task.Id);
+        var order=project.Cards.Select(c => c.Id).ToArray();
         var capabilities=CurrentCapabilities(task.Id);
         var body=new StackPanel { Spacing=7 };
         body.Children.Add(new TextBlock { Text=task.Title,TextWrapping=TextWrapping.Wrap,FontWeight=Microsoft.UI.Text.FontWeights.SemiBold });
         if (!string.IsNullOrEmpty(task.Description)) body.Children.Add(new TextBlock { Text=task.Description,TextWrapping=TextWrapping.Wrap,MaxLines=4,TextTrimming=TextTrimming.CharacterEllipsis,Foreground=Brush("TextFillColorSecondaryBrush") });
         body.Children.Add(new TextBlock { Text=T(remote.Kind == GitHubCardKind.Draft ? "GitHub draft" : "GitHub issue · content read-only"),FontSize=12,Foreground=Brush("TextFillColorSecondaryBrush") });
+        if (ShowingGitHubPending && githubPending!.CardId == task.Id)
+            body.Children.Add(new TextBlock { Text=T("Waiting for GitHub…"),FontSize=12,TextWrapping=TextWrapping.Wrap });
         if (remote.Url is { } url && Uri.TryCreate(url,UriKind.Absolute,out var uri) && uri.Scheme == "https" && uri.Host == "github.com")
             body.Children.Add(new HyperlinkButton { Content=T("Open on GitHub"),NavigateUri=uri,Padding=new(0) });
         var card=new Border { Child=body,Tag=task.Id,Padding=new(12),CornerRadius=new(6),BorderThickness=new(1),BorderBrush=Brush("CardStrokeColorDefaultBrush"),Background=Brush("CardBackgroundFillColorDefaultBrush") };
         AutomationProperties.SetName(card,task.Title+", GitHub");
         if (capabilities.MoveCards) EnableBoardDrag(card,task.Id,false);
         var menu=new MenuFlyout();
-        menu.Items.Add(MenuItem(T("Open card"),() => OpenEditorAsync(task.Id,task.ColumnId,allowDuringAction:true)));
+        menu.Items.Add(MenuItem(T("Open card"),() => OpenEditorAsync(task.Id,task.ColumnId,allowDuringAction:true),!ShowingGitHubPending));
         var siblings=WorkspaceView.Tasks(document!,task.ColumnId).Select(c => c.Id).ToList(); var index=siblings.IndexOf(task.Id);
         menu.Items.Add(MenuItem(T("Move up"),() => MoveCardAsync(task.Id,task.ColumnId,index-1,remote,order),capabilities.ReorderCards && index>0));
         menu.Items.Add(MenuItem(T("Move down"),() => MoveCardAsync(task.Id,task.ColumnId,index+1,remote,order),capabilities.ReorderCards && index<siblings.Count-1));
@@ -269,21 +274,27 @@ public sealed partial class MainWindow
         catch (GitHubApiException)
         {
             var code = await githubAuthentication.BeginAsync(githubLifetime.Token);
-            if (code.VerificationUri != "https://github.com/login/device") throw new GitHubApiException("GitHub returned an unsafe sign-in address.");
-            var content = new StackPanel { Spacing=14 };
-            content.Children.Add(new TextBlock { Text=T("Enter this code on GitHub: {0}",code.UserCode),IsTextSelectionEnabled=true });
-            content.Children.Add(new HyperlinkButton { Content=T("Open GitHub sign-in"),NavigateUri=new Uri(code.VerificationUri) });
-            content.Children.Add(new TextBlock { Text=T("Waiting for browser authorization…"),TextWrapping=TextWrapping.Wrap });
-            var dialog = Dialog(T("Sign in with GitHub"),content);
-            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(githubLifetime.Token);
-            var signIn = githubAuthentication.SignInAsync(code,cancellation.Token);
-            var showing = dialog.ShowAsync();
-            var completed = await Task.WhenAny(signIn,showing.AsTask());
-            if (completed != signIn) { cancellation.Cancel(); try { await signIn; } catch (OperationCanceledException) { } return; }
-            try { await signIn; } finally { dialog.Hide(); }
-            await showing; await github.AccountAsync(githubLifetime.Token);
+            if (!await WaitForGitHubSignInAsync(code,ct => githubAuthentication.SignInAsync(code,ct))) return;
+            await github.AccountAsync(githubLifetime.Token);
         }
         await PickGitHubProjectAsync(new GitHubApi(githubHttp,githubAuthentication.AccessTokenAsync));
+    }
+    private async Task<bool> WaitForGitHubSignInAsync(GitHubDeviceCode code,Func<CancellationToken,Task> authorize)
+    {
+        if (code.VerificationUri != "https://github.com/login/device") throw new GitHubApiException("GitHub returned an unsafe sign-in address.");
+        var content = new StackPanel { Spacing=14 };
+        content.Children.Add(new TextBlock { Text=T("Enter this code on GitHub: {0}",code.UserCode),IsTextSelectionEnabled=true });
+        content.Children.Add(new HyperlinkButton { Content=T("Open GitHub sign-in"),NavigateUri=new Uri(code.VerificationUri) });
+        content.Children.Add(new TextBlock { Text=T("Waiting for browser authorization…"),TextWrapping=TextWrapping.Wrap });
+        var dialog = Dialog(T("Sign in with GitHub"),content);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(githubLifetime.Token);
+        var signIn = authorize(cancellation.Token);
+        // WinRT permits one Completed handler; share one Task for both awaits.
+        var showing = dialog.ShowAsync().AsTask();
+        var completed = await Task.WhenAny(signIn,showing);
+        if (completed != signIn) { cancellation.Cancel(); try { await signIn; } catch (OperationCanceledException) { } return false; }
+        try { await signIn; return true; }
+        finally { dialog.Hide(); await showing; }
     }
     private async Task PickGitHubProjectAsync(IGitHubApi api)
     {
@@ -299,6 +310,17 @@ public sealed partial class MainWindow
         var picker = Dialog(T("Link GitHub project"),panel,T("Link"));
         GitHubProjectSnapshot? snapshot = null;
         var generation=0; var busy=false;
+        void UpdateLinkAvailability() => picker.IsPrimaryButtonEnabled=!busy && snapshot is not null &&
+            (group.IsChecked == true ? snapshot.Views.Any(v => v.IsSupported(snapshot.StatusFieldId))
+                : views.SelectedItems.OfType<GitHubViewChoice>().Any(v => v.Supported));
+        views.ContainerContentChanging += (_,args) => args.ItemContainer.IsEnabled=args.Item is GitHubViewChoice { Supported:true };
+        views.SelectionChanged += (_,args) =>
+        {
+            foreach (var choice in args.AddedItems.OfType<GitHubViewChoice>().Where(v => !v.Supported).ToArray()) views.SelectedItems.Remove(choice);
+            UpdateLinkAvailability();
+        };
+        group.Checked += (_,_) => UpdateLinkAvailability();
+        group.Unchecked += (_,_) => UpdateLinkAvailability();
         picker.Closing += (_,args) => args.Cancel=busy;
         organization.SelectionChanged += async (_,_) =>
         {
@@ -311,7 +333,7 @@ public sealed partial class MainWindow
                 if (current == generation) projects.ItemsSource=list.Select(p => new GitHubProjectChoice(p.Id,p.Title,p)).ToArray();
             }
             catch (IOException ex) { message.Text=text.TranslateDiagnostic(ex.Message); }
-            finally { busy=false; projects.IsEnabled=true; }
+            finally { busy=false; projects.IsEnabled=true; UpdateLinkAvailability(); }
         };
         projects.SelectionChanged += async (_,_) =>
         {
@@ -328,10 +350,9 @@ public sealed partial class MainWindow
                 foreach (var choice in choices.Where(v => v.Supported)) views.SelectedItems.Add(choice);
                 var count=choices.Count(v => v.Supported);
                 message.Text=count > 1 && !preferences.GroupsEnabled ? T("Multiple boards found. Enable groups to keep this project together.") : T("Only Status Kanban views can be linked.");
-                picker.IsPrimaryButtonEnabled=count > 0;
             }
             catch (IOException ex) { message.Text=text.TranslateDiagnostic(ex.Message); }
-            finally { busy=false; }
+            finally { busy=false; UpdateLinkAvailability(); }
         };
         picker.IsPrimaryButtonEnabled=false;
         picker.PrimaryButtonClick += async (_,args) =>
@@ -339,7 +360,7 @@ public sealed partial class MainWindow
             if (snapshot is null) { args.Cancel=true; return; }
             var numbers=group.IsChecked == true ? snapshot.Views.Where(v => v.IsSupported(snapshot.StatusFieldId)).Select(v => v.Number).ToArray()
                 : views.SelectedItems.Cast<GitHubViewChoice>().Where(v => v.Supported).Select(v => v.Number).ToArray();
-            if (numbers.Length == 0 || views.SelectedItems.Cast<GitHubViewChoice>().Any(v => !v.Supported))
+            if (numbers.Length == 0)
             { args.Cancel=true; message.Text=T("Select at least one supported Status board."); return; }
             var deferral=args.GetDeferral(); busy=true;
             try

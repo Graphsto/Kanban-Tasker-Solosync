@@ -133,10 +133,18 @@ public sealed class GitHubTests : IDisposable
         {
             var payload=request.Content is null ? "" : await request.Content.ReadAsStringAsync(); calls.Add(payload+request.RequestUri);
             if (request.Method==HttpMethod.Get) return Reply("[{\"node_id\":\"draft\"}]");
+            // GitHub's ProjectV2FieldConfiguration is a union: direct field { id } is invalid,
+            // even when a project has no items. Simulate its schema validation before resolving data.
+            if (System.Text.RegularExpressions.Regex.IsMatch(payload,@"\bfield\s*\{\s*id\b"))
+                return Reply("{\"errors\":[{\"message\":\"Selections cannot be made directly on unions\",\"extensions\":{\"code\":\"selectionMismatch\"}}]}");
             var variables=JsonDocument.Parse(payload).RootElement.GetProperty("variables");
             if (payload.Contains("viewerCanUpdate")) return Graph("{\"node\":{\"id\":\"P1\",\"number\":1,\"title\":\"Project\",\"viewerCanUpdate\":true,\"owner\":{\"login\":\"example\"}}}");
             if (payload.Contains("fields(first")) return Connection("fields","[{\"id\":\"STATUS\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[{\"id\":\"todo\",\"name\":\"To do\",\"color\":\"GREEN\",\"description\":\"\"}]}]");
-            if (payload.Contains("views(first")) return Connection("views","[{\"id\":\"V1\",\"number\":1,\"name\":\"Backlog\",\"layout\":\"BOARD_LAYOUT\",\"filter\":\"is:draft\",\"groupByFields\":{\"nodes\":[{\"id\":\"STATUS\"}],\"pageInfo\":{\"hasNextPage\":false}},\"sortByFields\":{\"nodes\":[],\"pageInfo\":{\"hasNextPage\":false}}}]");
+            if (payload.Contains("views(first"))
+            {
+                Assert.Contains("verticalGroupByFields",payload);
+                return Connection("views","["+View("BOARD_LAYOUT","STATUS",null)+"]");
+            }
             var second=variables.GetProperty("cursor").ValueKind==JsonValueKind.String;
             return second ? Connection("items","["+Item("pr","PullRequest")+"]")
                 : Connection("items","["+Item("draft","DraftIssue")+","+Item("issue","Issue")+"]",true);
@@ -144,6 +152,125 @@ public sealed class GitHubTests : IDisposable
         var api=new GitHubApi(http,_ => Task.FromResult("fixture-token")); var snapshot=await api.ProjectAsync("P1");
         Assert.Equal(2,snapshot.Cards.Length); Assert.Single(snapshot.Views[0].ItemIds); Assert.Equal("draft",snapshot.Views[0].ItemIds[0]);
         Assert.Equal(2,calls.Count(c => c.Contains("items(first"))); Assert.Contains(calls,c => c.Contains("/views/1/items"));
+    }
+    [Theory]
+    [InlineData("BOARD_LAYOUT","STATUS",null,true)]
+    [InlineData("BOARD_LAYOUT","STATUS","PRIORITY",false)]
+    [InlineData("BOARD_LAYOUT","PRIORITY",null,false)]
+    [InlineData("BOARD_LAYOUT",null,"STATUS",false)]
+    [InlineData("TABLE_LAYOUT","STATUS",null,false)]
+    [InlineData("ROADMAP_LAYOUT",null,null,false)]
+    public async Task ViewSupportUsesStatusColumnsAndRejectsRowGrouping(string layout,string? column,string? row,bool supported)
+    {
+        var membershipReads=0;
+        using var http=new HttpClient(new Handler(async request =>
+        {
+            if (request.Method==HttpMethod.Get) { membershipReads++; return Reply("[]"); }
+            var query=await request.Content!.ReadAsStringAsync();
+            if (query.Contains("viewerCanUpdate")) return Graph("{\"node\":{\"id\":\"P1\",\"number\":1,\"title\":\"Project\",\"viewerCanUpdate\":true,\"owner\":{\"login\":\"example\"}}}");
+            if (query.Contains("fields(first")) return Connection("fields","[{\"id\":\"STATUS\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[]}]");
+            if (query.Contains("views(first")) return Connection("views","["+View(layout,column,row)+"]");
+            return Connection("items","[]");
+        }));
+        var snapshot=await new GitHubApi(http,_ => Task.FromResult("fixture-token")).ProjectAsync("P1");
+        var view=Assert.Single(snapshot.Views);
+        Assert.Equal(column,view.GroupFieldId); Assert.Equal(row is not null,view.HasRowGrouping);
+        Assert.Equal(supported,view.IsSupported(snapshot.StatusFieldId)); Assert.Equal(supported ? 1 : 0,membershipReads);
+        // Cache serialization must retain the row-grouping restriction across restarts.
+        Assert.Equal(supported,JsonSerializer.Deserialize<GitHubView>(JsonSerializer.Serialize(view))!.IsSupported(snapshot.StatusFieldId));
+    }
+    [Fact] public async Task IncompleteColumnConfigurationRejectsSnapshotBeforeMembershipReads()
+    {
+        using var http=new HttpClient(new Handler(async request =>
+        {
+            Assert.Equal(HttpMethod.Post,request.Method);
+            var query=await request.Content!.ReadAsStringAsync();
+            if (query.Contains("viewerCanUpdate")) return Graph("{\"node\":{\"id\":\"P1\",\"number\":1,\"title\":\"Project\",\"viewerCanUpdate\":true,\"owner\":{\"login\":\"example\"}}}");
+            if (query.Contains("fields(first")) return Connection("fields","[{\"id\":\"STATUS\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[]}]");
+            if (query.Contains("views(first")) return Connection("views","["+View("BOARD_LAYOUT","STATUS",null,true)+"]");
+            return Connection("items","[]");
+        }));
+        var error=await Assert.ThrowsAsync<GitHubApiException>(() => new GitHubApi(http,_ => Task.FromResult("fixture-token")).ProjectAsync("P1"));
+        Assert.Equal("This project has too many card fields or view rules to load safely.",error.Message);
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnfilteredViewUsesCompleteProjectEvenWhenRestViewFails(bool sorted)
+    {
+        var itemPages=0;
+        using var http=new HttpClient(new Handler(async request =>
+        {
+            // The unnecessary view endpoint was returning HTTP 500 in the live project.
+            Assert.Equal(HttpMethod.Post,request.Method);
+            var query=await request.Content!.ReadAsStringAsync();
+            if (query.Contains("viewerCanUpdate")) return Graph("{\"node\":{\"id\":\"P1\",\"number\":1,\"title\":\"Project\",\"viewerCanUpdate\":true,\"owner\":{\"login\":\"example\"}}}");
+            if (query.Contains("fields(first")) return Connection("fields","[{\"id\":\"STATUS\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[]}]");
+            if (query.Contains("views(first")) return Connection("views","["+View("BOARD_LAYOUT","STATUS",null,filter:"",sorted:sorted)+"]");
+            return ++itemPages==1 ? Connection("items","["+Item("z-draft","DraftIssue")+"]",true)
+                : Connection("items","["+Item("a-issue","Issue")+","+Item("pr","PullRequest")+","+Item("hidden","RedactedProjectV2Item")+","+Item("archived","DraftIssue").Replace("\"isArchived\":false","\"isArchived\":true")+"]");
+        }));
+        var snapshot=await new GitHubApi(http,_ => Task.FromResult("fixture-token")).ProjectAsync("P1");
+        Assert.Equal(2,itemPages); Assert.Equal(2,snapshot.Cards.Length);
+        Assert.Equal(sorted ? ["a-issue","z-draft"] : new[] { "z-draft","a-issue" },snapshot.Views[0].ItemIds);
+        Assert.Equal(sorted,snapshot.Views[0].Sorted);
+    }
+    [Fact] public async Task MissingFilterDoesNotExposeAllProjectCards()
+    {
+        using var http=new HttpClient(new Handler(async request =>
+        {
+            Assert.Equal(HttpMethod.Post,request.Method);
+            var query=await request.Content!.ReadAsStringAsync();
+            if (query.Contains("viewerCanUpdate")) return Graph("{\"node\":{\"id\":\"P1\",\"number\":1,\"title\":\"Project\",\"viewerCanUpdate\":true,\"owner\":{\"login\":\"example\"}}}");
+            if (query.Contains("fields(first")) return Connection("fields","[{\"id\":\"STATUS\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[]}]");
+            if (query.Contains("views(first")) return Connection("views","["+View("BOARD_LAYOUT","STATUS",null).Replace("\"filter\":\"is:draft\",","")+"]");
+            return Connection("items","["+Item("draft","DraftIssue")+"]");
+        }));
+        var error=await Assert.ThrowsAsync<GitHubApiException>(() => new GitHubApi(http,_ => Task.FromResult("fixture-token")).ProjectAsync("P1"));
+        Assert.Equal("GitHub returned an incomplete response.",error.Message);
+    }
+    [Fact] public async Task FailedFilteredViewKeepsCacheReadOnlyUntilACompleteRefreshRecovers()
+    {
+        var viewReads=0;
+        using var http=new HttpClient(new Handler(async request =>
+        {
+            if (request.Method==HttpMethod.Get)
+            {
+                if (++viewReads==1) return Reply("temporarily unavailable",HttpStatusCode.InternalServerError);
+                return Reply("[{\"node_id\":\"draft\"}]");
+            }
+            var query=await request.Content!.ReadAsStringAsync();
+            if (query.Contains("viewer {")) return Graph("{\"viewer\":{\"id\":\"ACCOUNT\",\"login\":\"tester\"}}");
+            if (query.Contains("viewerCanUpdate")) return Graph("{\"node\":{\"id\":\"P1\",\"number\":1,\"title\":\"Project\",\"viewerCanUpdate\":true,\"owner\":{\"login\":\"example\"}}}");
+            if (query.Contains("fields(first")) return Connection("fields","[{\"id\":\"STATUS\",\"name\":\"Status\",\"dataType\":\"SINGLE_SELECT\",\"options\":[]}]");
+            if (query.Contains("views(first")) return Connection("views","["+View("BOARD_LAYOUT","STATUS",null)+"]");
+            return Connection("items","["+Item("draft","DraftIssue")+","+Item("issue","Issue")+"]");
+        }));
+        var source=new GitHubBoardSource(new GitHubApi(http,_ => Task.FromResult("fixture-token")),new GitHubStorage(directory));
+        await source.AccountAsync(); await source.LinkAsync(GitHubFakeApi.Fixture(),[1],false);
+        var previous=source.Projects["P1"];
+        var error=await Assert.ThrowsAsync<GitHubApiException>(() => source.RefreshAsync("P1"));
+        Assert.Equal("GitHub is temporarily unavailable.",error.Message); Assert.False(error.Uncertain);
+        Assert.Same(previous,source.Projects["P1"]); Assert.False(source.Online("P1"));
+        Assert.False(source.Capabilities(GitHubIdentity.Board("P1",1).ToString(),GitHubIdentity.Card("P1","draft").ToString()).RemoveCards);
+        await source.RefreshAsync("P1");
+        Assert.Equal(["draft"],source.Projects["P1"].Views[0].ItemIds); Assert.Equal(2,source.Projects["P1"].Cards.Length);
+        Assert.True(source.Online("P1")); Assert.Null(source.Error("P1"));
+        Assert.True(source.Capabilities(GitHubIdentity.Board("P1",1).ToString(),GitHubIdentity.Card("P1","draft").ToString()).RemoveCards);
+    }
+    [Theory]
+    [InlineData("selectionMismatch")]
+    [InlineData("undefinedField")]
+    public async Task ApiSchemaFailuresNeverSuggestChangingProjectPermissions(string code)
+    {
+        using var http=new HttpClient(new Handler(_ => Task.FromResult(Reply(JsonSerializer.Serialize(new
+        {
+            errors=new[] { new { message="Synthetic schema error",extensions=new { code } } }
+        })))));
+        var api=new GitHubApi(http,_ => Task.FromResult("fixture-token"));
+        var error=await Assert.ThrowsAsync<GitHubApiException>(() => api.ViewerAsync());
+        Assert.Equal("GitHub rejected an unsupported API request. Update the app and try again.",error.Message);
+        Assert.False(error.Uncertain);
     }
     [Fact] public async Task FailedLaterPageRejectsEntireSnapshot()
     {
@@ -289,6 +416,13 @@ public sealed class GitHubTests : IDisposable
     private static string Item(string id,string kind) => JsonSerializer.Serialize(new { id,isArchived=false,
         status=new { optionId="todo",field=new { id="STATUS" } },
         content=new { __typename=kind,id="content-"+id,title=id,body="body",url="https://github.com/example/repo/issues/1",createdAt="2026-10-08T10:00:00Z",updatedAt="2026-10-08T10:00:00Z" } });
+    private static string View(string layout,string? column,string? row,bool incompleteColumns=false,string filter="is:draft",bool sorted=false) => JsonSerializer.Serialize(new
+    {
+        id="V1",number=1,name="Backlog",layout,filter,
+        groupByFields=new { nodes=row is null ? [] : new[] { new { id=row } },pageInfo=new { hasNextPage=false } },
+        verticalGroupByFields=new { nodes=column is null ? [] : new[] { new { id=column } },pageInfo=new { hasNextPage=incompleteColumns } },
+        sortByFields=new { nodes=sorted ? new object[] { new { direction="ASC",field=new { id="TITLE",name="Title",dataType="TITLE" } } } : [],pageInfo=new { hasNextPage=false } }
+    });
     private static HttpResponseMessage Connection(string name,string nodes,bool more=false) => Graph("{\"node\":{\""+name+"\":{\"nodes\":"+nodes+",\"pageInfo\":{\"hasNextPage\":"+(more ? "true" : "false")+",\"endCursor\":\"next\"}}}}");
     private static HttpResponseMessage Graph(string data) => Reply("{\"data\":"+data+"}");
     private static HttpResponseMessage Reply(string body,HttpStatusCode code=HttpStatusCode.OK) => new(code) { Content=new StringContent(body,Encoding.UTF8,"application/json") };

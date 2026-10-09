@@ -5,10 +5,12 @@ continue to use your chosen JSON file; GitHub links and cached cards use a
 separate directory in the app's local profile. GitHub also works without an open
 JSON file. Changing that file does not change GitHub links.
 
-This feature is being tested on `codex/github-projects`. A registered GitHub App
-and its public Client ID are still required before real sign-in and the live
-two-client acceptance test can be completed. Builds without this configuration
-explain the missing setup when you select **Link GitHub project**.
+This feature is being tested on `codex/github-projects`. Builds use the registered
+[Kanban Tasker Solosync GitHub App](https://github.com/apps/kanban-tasker-solosync),
+whose public Client ID is configured for both distribution channels. Real
+two-client acceptance still needs to be completed before production integration.
+Builds without a Client ID explain the missing setup when you select
+**Link GitHub project**.
 
 ## Link a project
 
@@ -22,7 +24,9 @@ explain the missing setup when you select **Link GitHub project**.
    new supported views on a later refresh.
 
 Only Kanban views whose column field is **Status** are supported. Tables,
-roadmaps and boards grouped by another field are listed as unsupported.
+roadmaps, boards with another column field, and boards with additional row
+grouping (swimlanes), such as the Priority board template, are listed as unsupported.
+Unsupported views are disabled in the picker.
 Saved view filters are applied by GitHub. A filtered-out card still belongs to
 the project. Cards without a status appear under **No status**. Saved automatic
 sorting disables manual reordering in that view.
@@ -51,6 +55,18 @@ every 60 seconds. Window activation, the refresh action and completed changes
 also trigger reads. GitHub rate limits can lengthen these intervals or pause
 requests. This is frequent polling, with no atomic lock against another client
 or someone changing the project on GitHub.
+
+The status bar shows the last successful GitHub update time. A failed refresh
+displays a warning with a manual refresh button; automatic checks continue and
+the warning clears after a successful read. Unfiltered views use the complete
+project item list, while saved filters are still evaluated by GitHub.
+
+Moving or saving a card immediately shows **Waiting for GitHub…**. The original
+stays visible while a faded, non-interactive preview shows the proposed position
+or content. The preview disappears after the response has been checked. It is
+not an extra card or an offline queue. If a request fails, the preview is removed
+and the app shows the error; unsaved editor input stays available in memory.
+For automatically sorted views, GitHub determines the final position.
 
 When GitHub is unreachable, cached boards remain readable and all writes are
 disabled. There is no offline queue. Input already entered in an editor remains
@@ -90,15 +106,24 @@ setup once; each user subsequently installs/authorizes the application as needed
    also needs access to the project and write rights for editing. With SAML SSO,
    start an active organization SAML session before reauthorization.
 6. Copy the **Client ID** shown on the registration's settings page. This is public
-   configuration and differs from the numeric App ID. Supply it as
-   `KanbanGitHubClientId` in `packaging/Distribution.props` or as an MSBuild property:
+   configuration and differs from the numeric App ID. The default registration
+   uses `Iv23liMgxY35gcqrfMJy` in `packaging/Distribution.props`. For a different
+   registration, override `KanbanGitHubClientId` as an MSBuild property:
 
    ```powershell
    dotnet build src/KanbanTasker.Desktop/KanbanTasker.Desktop.csproj -c Release -r win-x64 -p:Platform=x64 -p:KanbanGitHubClientId=YOUR_PUBLIC_CLIENT_ID
    ```
 
 Do not supply a Client Secret, private key or access token to the build. Device
-flow token refresh does not require the Client Secret. Credentials are protected
+flow and its token refresh require neither a private key nor a Client Secret.
+GitHub's private-key setup notice concerns authentication as the application
+itself, such as signing a JWT for an installation access token; this desktop
+client uses user access tokens instead. No private key needs to be generated for
+this flow. If one has already been downloaded as a `.pem` file, keep it in secure
+storage outside the repository and app. Never upload it to a chat or include it
+in a build. See GitHub's [private-key documentation](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/managing-private-keys-for-github-apps).
+
+Credentials are protected
 with Windows DPAPI for the current user; cached contents are ordinary local JSON.
 Signing out removes local credentials and locks cached boards. Revoke the App's
 authorization on GitHub as well if you want to remove its server-side access.

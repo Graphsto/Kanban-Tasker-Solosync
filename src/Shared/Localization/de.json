@@ -1,4 +1,10 @@
 {
+  "Waiting for GitHub…": "Warte auf GitHub…",
+  "GitHub · updated {0:T}": "GitHub · aktualisiert um {0:T}",
+  "GitHub checks for changes automatically.": "GitHub wird automatisch auf Änderungen geprüft.",
+  "GitHub refresh failed": "GitHub-Aktualisierung fehlgeschlagen",
+  "Updates are retried automatically.": "Aktualisierungen werden automatisch erneut versucht.",
+  "GitHub is temporarily unavailable.": "GitHub ist vorübergehend nicht verfügbar.",
   "Update in Microsoft Store": "Im Microsoft Store aktualisieren",
   "Microsoft Store manages updates according to your Windows settings.": "Der Microsoft Store verwaltet Updates entsprechend deinen Windows-Einstellungen.",
   "Privacy policy": "Datenschutzhinweise",
@@ -328,5 +334,6 @@
   "This project does not have a Status selection field.": "Dieses Projekt hat kein Status-Auswahlfeld.",
   "GitHub sign-in could not be completed. Check the public Client ID and enable Device Flow in the GitHub App.": "Die GitHub-Anmeldung ist fehlgeschlagen. Prüfe die öffentliche Client-ID und aktiviere Device Flow in der GitHub App.",
   "After {0}": "Nach {0}",
-  "Move to start": "An den Anfang verschieben"
+  "Move to start": "An den Anfang verschieben",
+  "GitHub rejected an unsupported API request. Update the app and try again.": "GitHub hat eine nicht unterstützte API-Anfrage abgewiesen. Aktualisiere die App und versuche es erneut."
 }

@@ -7,7 +7,7 @@ The GitHub repository contains source, release notes and release drafts. Do not 
 Optional [GitHub Projects](GITHUB.md) is separate from app updates. Its registered
 App, public Client ID and organization installation must be configured and the
 two-client live acceptance completed before feature integration/release. The
-feature branch changes neither product nor Store package version. Review the
+current product and Store package versions are both 2.4.2.0. Review the
 updated privacy text and cache/token retention when preparing a submission.
 
 ## Distribution profiles and versions
@@ -29,8 +29,8 @@ Windows may virtualise the profile directory for packaged apps. No settings or r
 
 Two versions are defined in [Directory.Build.props](Directory.Build.props):
 
-- **Version = 2.4.1.8:** visible product version, assembly version, GitHub tag `v2.4.1.8`, and local test package/installer version.
-- **StorePackageVersion = 2.4.1.0:** MSIX and bundle version. Microsoft reserves the fourth component, so it stays zero. Each further submission advances the third component, for example product `2.4.1.9` with Store package `2.4.2.0`. This internal counter is not a product feature version.
+- **Version = 2.4.2.0:** visible product version, assembly version, GitHub tag `v2.4.2.0`, and local test package/installer version.
+- **StorePackageVersion = 2.4.2.0:** MSIX and bundle version. Microsoft reserves the fourth component, so it stays zero. Each further submission advances the third component, for example product `2.4.2.1` with Store package `2.4.3.0`. This internal counter is not a product feature version.
 
 The starting Store number assumes that no equal or higher version has already been submitted in Partner Center. **Check Partner Center before the first upload.** GitHub cannot inspect rejected, withdrawn or private Store submissions; reserve a new Store number for every subsequent submission even if the previous submission was not published. Keep both values and their mapping in source control. Neither workflow changes them automatically.
 
